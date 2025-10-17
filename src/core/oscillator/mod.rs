@@ -1,3 +1,4 @@
+pub mod composite_osc;
 pub mod func_osc;
 pub mod primetives;
 

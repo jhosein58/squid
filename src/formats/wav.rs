@@ -1,7 +1,6 @@
 use crate::error::{Result, SquidError};
-
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -29,74 +28,92 @@ impl Wav {
         let file = File::open(path)?;
         let mut reader = BufReader::new(file);
 
-        let mut header = [0u8; 44];
-        reader.read_exact(&mut header)?;
-        verify_header(&header)?;
+        let mut riff_header = [0u8; 12];
+        reader.read_exact(&mut riff_header)?;
+        if &riff_header[0..4] != b"RIFF" || &riff_header[8..12] != b"WAVE" {
+            return Err(SquidError::InvalidHeader("Invalid RIFF/WAVE format".into()));
+        }
 
-        let spec = WavSpec::from_header(&header);
-        let data_size = u32::from_le_bytes(header[40..44].try_into().unwrap());
+        let mut maybe_spec: Option<WavSpec> = None;
+        let mut data_bytes: Vec<u8> = Vec::new();
 
-        let mut data_bytes = vec![0; data_size as usize];
-        reader.read_exact(&mut data_bytes)?;
+        loop {
+            let mut chunk_header = [0u8; 8];
+            if reader.read_exact(&mut chunk_header).is_err() {
+                break;
+            }
+
+            let chunk_id = &chunk_header[0..4];
+            let chunk_size = u32::from_le_bytes(chunk_header[4..8].try_into().unwrap());
+
+            match chunk_id {
+                b"fmt " => {
+                    if chunk_size < 16 {
+                        return Err(SquidError::InvalidHeader("fmt chunk is too small".into()));
+                    }
+                    let mut fmt_bytes = vec![0; chunk_size as usize];
+                    reader.read_exact(&mut fmt_bytes)?;
+
+                    let audio_format = u16::from_le_bytes(fmt_bytes[0..2].try_into().unwrap());
+                    if audio_format != 1 {
+                        return Err(SquidError::UnsupportedFormat(format!(
+                            "Only PCM (format=1) is supported, found {}",
+                            audio_format
+                        )));
+                    }
+
+                    maybe_spec = Some(WavSpec {
+                        audio_format,
+                        num_channels: u16::from_le_bytes(fmt_bytes[2..4].try_into().unwrap()),
+                        sample_rate: u32::from_le_bytes(fmt_bytes[4..8].try_into().unwrap()),
+                        bits_per_sample: u16::from_le_bytes(fmt_bytes[14..16].try_into().unwrap()),
+                    });
+                }
+                b"data" => {
+                    data_bytes.resize(chunk_size as usize, 0);
+                    reader.read_exact(&mut data_bytes)?;
+
+                    break;
+                }
+                _ => {
+                    reader.seek(SeekFrom::Current(chunk_size as i64))?;
+                }
+            }
+        }
+
+        let spec = maybe_spec.ok_or(SquidError::InvalidHeader(
+            "Could not find 'fmt ' chunk".into(),
+        ))?;
+        if data_bytes.is_empty() {
+            return Err(SquidError::InvalidHeader(
+                "Could not find 'data' chunk".into(),
+            ));
+        }
 
         let samples = samples_from_bytes(&data_bytes, spec.bits_per_sample)?;
-
-        Ok(Self {
-            spec: spec,
-            samples: samples,
-        })
+        Ok(Self { spec, samples })
     }
 
     pub fn write_to_path<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let file = File::create(path)?;
         let mut writer = BufWriter::new(file);
+
         const BITS_PER_SAMPLE: u16 = 16;
 
         let data_bytes = bytes_from_samples(&self.samples, BITS_PER_SAMPLE)?;
 
-        let spec = WavSpec {
-            audio_format: 1,
+        let output_spec = WavSpec {
+            audio_format: 1, // PCM
             num_channels: self.spec.num_channels,
             sample_rate: self.spec.sample_rate,
             bits_per_sample: BITS_PER_SAMPLE,
         };
 
-        let header = build_header(&spec, data_bytes.len() as u32);
+        let header = build_header(&output_spec, data_bytes.len() as u32);
 
         writer.write_all(&header)?;
         writer.write_all(&data_bytes)?;
-
         Ok(())
-    }
-}
-
-fn verify_header(header: &[u8; 44]) -> Result<()> {
-    if &header[0..4] != b"RIFF" || &header[8..12] != b"WAVE" || &header[12..16] != b"fmt " {
-        return Err(SquidError::InvalidHeader("Invalid RIFF/WAVE format".into()));
-    }
-    let audio_format = u16::from_le_bytes(header[20..22].try_into().unwrap());
-    if audio_format != 1 {
-        return Err(SquidError::UnsupportedFormat(format!(
-            "Only PCM (format=1) is supported, found {}",
-            audio_format
-        )));
-    }
-    if &header[36..40] != b"data" {
-        return Err(SquidError::InvalidHeader(
-            "Could not find 'data' chunk".into(),
-        ));
-    }
-    Ok(())
-}
-
-impl WavSpec {
-    fn from_header(header: &[u8; 44]) -> Self {
-        Self {
-            audio_format: 1,
-            num_channels: u16::from_le_bytes(header[22..24].try_into().unwrap()),
-            sample_rate: u32::from_le_bytes(header[24..28].try_into().unwrap()),
-            bits_per_sample: u16::from_le_bytes(header[34..36].try_into().unwrap()),
-        }
     }
 }
 
@@ -139,7 +156,7 @@ fn samples_from_bytes(data_bytes: &[u8], bits_per_sample: u16) -> Result<Vec<f32
                 chunk[0],
                 chunk[1],
                 chunk[2],
-                if chunk[2] & 0x80 > 0 { 0xFF } else { 0 },
+                if chunk[2] & 0x80 != 0 { 0xFF } else { 0x00 },
             ]);
             samples.push(val as f32 / 8_388_607.0);
         }),
@@ -149,7 +166,7 @@ fn samples_from_bytes(data_bytes: &[u8], bits_per_sample: u16) -> Result<Vec<f32
         }),
         _ => {
             return Err(SquidError::UnsupportedFormat(format!(
-                "{} bits per sample is not supported.",
+                "{} bits per sample is not supported for reading.",
                 bits_per_sample
             )));
         }
