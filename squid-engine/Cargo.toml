@@ -1,0 +1,8 @@
+[package]
+name = "squid-engine"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+squid-core = { path = "../squid-core" }
+cpal = "0.16.0"

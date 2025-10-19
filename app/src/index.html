@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Squid UI - Dynamic Polish</title>
+
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500&display=swap"
+            rel="stylesheet"
+        />
+
+        <style>
+            :root {
+                --bg-main: #1e1e1e;
+                --bg-top-bar: #2a2a2a;
+                --bg-controls: #1a1a1a;
+                --text-primary: #e0e0e0;
+                --text-secondary: #9e9e9e;
+                --accent-orange: #f97316;
+                --accent-blue: #a7c7ff;
+                --accent-blue-bg: rgba(200, 220, 255, 0.1);
+                --accent-blue-border: rgba(167, 199, 255, 0.3);
+                --accent-blue-glow: rgba(167, 199, 255, 0.15);
+                --border-color: #444;
+                --font-main: "Inter", sans-serif;
+                --font-mono: "Roboto Mono", monospace;
+            }
+
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100vh;
+                background-color: var(--bg-main);
+                color: var(--text-primary);
+                font-family: var(--font-main);
+                overflow: hidden;
+            }
+
+            .app-container {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                width: 100%;
+            }
+
+            .top-bar {
+                width: 100%;
+                background: linear-gradient(to bottom, #333, #2a2a2a);
+                border-bottom: 1px solid #111;
+                display: flex;
+                align-items: center;
+                padding: 8px 16px;
+                box-sizing: border-box;
+                gap: 24px;
+                flex-shrink: 0;
+                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            }
+
+            .icon-btn {
+                border: none;
+                background-color: transparent;
+                cursor: pointer;
+                color: var(--text-secondary);
+                padding: 6px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 6px;
+                transition:
+                    background-color 0.2s,
+                    color 0.2s;
+                position: relative;
+            }
+
+            .icon-btn svg {
+                width: 22px;
+                height: 22px;
+                fill: currentColor;
+                z-index: 2;
+            }
+            .icon-btn:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: var(--text-primary);
+            }
+
+            .transport-controls {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                background-color: var(--bg-controls);
+                border-radius: 8px;
+                padding: 6px;
+                box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+            }
+
+            #play-btn {
+                background-color: rgba(255, 255, 0, 0);
+                transition:
+                    background-color 0.2s,
+                    color 0.2s,
+                    background-image 0.2s;
+            }
+            #play-btn:hover {
+                background-image: radial-gradient(
+                    circle,
+                    rgba(249, 115, 22, 0.1),
+                    transparent 70%
+                );
+            }
+            #play-btn.playing {
+                background-image: radial-gradient(
+                    circle,
+                    rgba(249, 115, 22, 0.2),
+                    transparent 70%
+                );
+            }
+            #play-btn.playing svg {
+                color: var(--accent-orange);
+            }
+
+            #rec-btn {
+                color: #e53935;
+                padding: 7px;
+            }
+            #rec-btn svg {
+                width: 19px;
+                height: 19px;
+            }
+            #rec-btn:hover {
+                color: #f44336;
+            }
+
+            .info-display {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+            }
+            .display-item {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .display-item label {
+                font-size: 10px;
+                font-weight: 600;
+                color: var(--text-secondary);
+                letter-spacing: 0.5px;
+                text-transform: uppercase;
+            }
+
+            .display-value {
+                background-color: #111;
+                border: 1px solid #333;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-family: var(--font-mono);
+                font-size: 16px;
+                font-weight: 500;
+                box-shadow:
+                    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+                    inset 0 1px 1px rgba(255, 255, 255, 0.05);
+                text-align: center;
+                color: var(--text-secondary);
+            }
+
+            #tempo-input {
+                background-color: var(--accent-blue-bg);
+                color: var(--accent-blue);
+                border: 1px solid var(--accent-blue-border);
+                box-shadow:
+                    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+                    inset 0 1px 1px rgba(255, 255, 255, 0.1),
+                    0 0 10px var(--accent-blue-glow);
+                width: 70px;
+                text-shadow: 0 0 5px rgba(167, 199, 255, 0.5);
+            }
+
+            #tempo-input::-webkit-outer-spin-button,
+            #tempo-input::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+            #tempo-input[type="number"] {
+                -moz-appearance: textfield;
+            }
+
+            .main-content {
+                flex-grow: 1;
+                position: relative;
+            }
+            #main-canvas {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+            }
+
+            .workspace-nav {
+                margin-left: auto;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 0 8px;
+            }
+            .workspace-pill {
+                width: 10px;
+                height: 10px;
+                background-color: rgba(255, 255, 255, 0.3);
+                border-radius: 16px;
+                cursor: pointer;
+                transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+            }
+            .workspace-pill:hover {
+                background-color: rgba(255, 255, 255, 0.8);
+            }
+            .workspace-pill.active {
+                width: 20px;
+                background-color: #ffffff;
+                box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="app-container">
+            <div class="top-bar">
+                <button id="settings-btn" class="icon-btn" title="Settings">
+                    <svg viewBox="0 0 24 24">
+                        <path
+                            d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.69-1.62-0.92L14.4,2.23C14.34,2,14.09,1.86,13.85,1.86 h-3.8c-0.24,0-0.48,0.14-0.54,0.37l-0.64,2.71c-0.59-0.23-1.12-0.54-1.62,0.92L5.27,5.05C5.05,4.98,4.79,5.05,4.68,5.25 l-1.92,3.32C2.65,8.77,2.7,9.04,2.88,9.18l2.03,1.58C4.86,11.06,4.84,11.37,4.84,11.7c0,0.32,0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.69,1.62,0.92 l0.64,2.71c0.06,0.23,0.3,0.37,0.54,0.37h3.8c0.24,0,0.48-0.14,0.54,0.37l0.64-2.71c0.59-0.23,1.12-0.54,1.62-0.92l2.39,0.96 c0.22,0.08,0.47,0.01,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.49-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"
+                        />
+                    </svg>
+                </button>
+
+                <div class="transport-controls">
+                    <button id="play-btn" class="icon-btn" title="Play/Pause">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                        </svg>
+                    </button>
+                    <button id="stop-btn" class="icon-btn" title="Stop">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M6 6h12v12H6z" />
+                        </svg>
+                    </button>
+                    <button id="rec-btn" class="icon-btn" title="Record">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
+                            />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="info-display">
+                    <div class="display-item">
+                        <label for="tempo-input">TEMPO</label>
+                        <input
+                            type="number"
+                            id="tempo-input"
+                            class="display-value"
+                            value="120.00"
+                            step="0.01"
+                        />
+                    </div>
+                    <div class="display-item">
+                        <label>TIME</label>
+                        <div id="time-display" class="display-value">
+                            00:00:00:00
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workspace-nav">
+                    <div class="workspace-pill active" title="Mixer"></div>
+                    <div class="workspace-pill" title="Arrangement"></div>
+                    <div class="workspace-pill" title="Piano Roll"></div>
+                    <div class="workspace-pill" title="Synthesizer"></div>
+                </div>
+            </div>
+
+            <div class="main-content">
+                <canvas id="main-canvas"></canvas>
+            </div>
+        </div>
+        <script type="module" src="js/main.js"></script>
+    </body>
+</html>
