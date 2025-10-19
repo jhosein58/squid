@@ -50,45 +50,44 @@ Here’s a practical example demonstrating how to use the engine to generate a 3
 ```rust
 // main.rs
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-// --- 1. Setup the Synthesis Environment ---
+fn main() {
+    // --- 1. Setup the Synthesis Environment ---
 
-// Define the sample rate for our audio context.
-let sample_rate = 44100;
+    // Define the sample rate for our audio context.
+    let sample_rate = 44100;
 
-// --- 2. Create the Sound Source ---
+    // --- 2. Create the Sound Source ---
 
-// Instantiate a Sine Oscillator.
-// This will be our basic sound generator.
-let mut sine_osc = SinOsc::new(sample_rate);
+    // Instantiate a Sine Oscillator.
+    // This will be our basic sound generator.
+    let mut sine_osc = SinOsc(sample_rate);
 
-// Set the oscillator's frequency to 440 Hz (the note 'A4').
-sine_osc.set_frequency(440.0);
+    // Set the oscillator's frequency to 440 Hz (the note 'A4').
+    sine_osc.set_frequency(440.0);
 
-// --- 3. Prepare the Output ---
+    // --- 3. Prepare the Output ---
 
-// Create a WAV file container with CD-quality mono specs
-// (16-bit, 44100 Hz, 1 channel).
-let mut wav_file = Wav::new(WavSpec::cd_mono());
+    // Create a WAV file container with CD-quality mono specs
+    // (16-bit, 44100 Hz, 1 channel).
+    let mut wav_file = Wav(WavSpec::cd_mono());
 
-// --- 4. Generate the Audio Samples ---
+    // --- 4. Generate the Audio Samples ---
 
-// Run a loop to generate 3 seconds of audio.
-// For each step, get the next sample from our oscillator.
-println!("Generating 3 seconds of a 440 Hz sine wave...");
-for _ in 0..(sample_rate * 3) {
-    let sample = sine_osc.next_sample();
-    wav_file.push_sample(sample);
-}
+    // Run a loop to generate 3 seconds of audio.
+    // For each step, get the next sample from our oscillator.
+    println!("Generating 3 seconds of a 440 Hz sine wave...");
+    for _ in 0..(sample_rate * 3) {
+        wav_file.push_sample(sine_osc.next_sample());
+    }
 
-// --- 5. Save the Result ---
+    // --- 5. Save the Result ---
 
-// Write all the generated samples to a file named "output.wav".
-wav_file.write_to_path("output.wav")?;
+    // Write all the generated samples to a file named "output.wav".
+    wav_file.write_to_path("output.wav").unwrap();
 
-println!("Successfully saved to output.wav!");
+    println!("Successfully saved to output.wav!");
 
-Ok(())
+    Ok(())
 }
 ```
 This code is self-contained and demonstrates a complete workflow: **Setup -> Generate -> Save**. It highlights how easy it is to get started with the fundamental building blocks of the Squid engine.
