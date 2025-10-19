@@ -44,32 +44,52 @@ Squid's `core` is built around a few simple but powerful traits:
 *   **`Modulator`**: A source of control signals. Modulators, like LFOs (Low-Frequency Oscillators) or envelopes (ADSR), don't produce audible sound themselves but are used to dynamically change the parameters of other modules (e.g., modulating an oscillator's pitch or a filter's cutoff frequency).
 
 ---
+## 🚀 Quick Example: Generating a WAV file
 
-## 🚀 Quick Example
-
-Here’s a glimpse of how you can combine modules in `squid-core`. This example creates a simple synth voice where a sine wave is processed by a soft saturator.
+Here’s a practical example demonstrating how to use the engine to generate a 3-second, 440 Hz sine wave and save it as a `.wav` file. This showcases the simplicity of the API.
 ```rust
-// This is a conceptual example of using the core library
+// main.rs
 
-// 1. Define the building blocks
-let mut sine_osc = SinOsc::new(44100.0);
-sine_osc.set_frequency(440.0); // A4 note
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+// --- 1. Setup the Synthesis Environment ---
 
-let mut saturator = SoftSaturator::new(5.0); // Add some warm distortion
+// Define the sample rate for our audio context.
+let sample_rate = 44100;
 
-// 2. In your audio loop, process a sample
-fn get_next_sample(osc: &mut SinOsc, proc: &mut SoftSaturator) -> f32 {
-let raw_sample = osc.process();
-let processed_sample = proc.process(raw_sample);
-processed_sample
+// --- 2. Create the Sound Source ---
+
+// Instantiate a Sine Oscillator.
+// This will be our basic sound generator.
+let mut sine_osc = SinOsc::new(sample_rate);
+
+// Set the oscillator's frequency to 440 Hz (the note 'A4').
+sine_osc.set_frequency(440.0);
+
+// --- 3. Prepare the Output ---
+
+// Create a WAV file container with CD-quality mono specs
+// (16-bit, 44100 Hz, 1 channel).
+let mut wav_file = Wav::new(WavSpec::cd_mono());
+
+// --- 4. Generate the Audio Samples ---
+
+// Run a loop to generate 3 seconds of audio.
+// For each step, get the next sample from our oscillator.
+println!("Generating 3 seconds of a 440 Hz sine wave...");
+for _ in 0..(sample_rate * 3) {
+let sample = sine_osc.process();
+wav_file.push_sample(sample);
 }
 
-// The final output is a warm, slightly distorted sine wave.
+// --- 5. Save the Result ---
 
-## 🗺️ Project Status & Roadmap
+// Write all the generated samples to a file named "output.wav".
+wav_file.write_to_path("output.wav")?;
 
-*   [x] **Core DSP (`squid-core`)**: `no_std` abstractions and initial set of modules are complete and functional.
-*   [ ] **Engine Layer (`squid-engine`)**: Basic structure is in place, but audio I/O and real-time safety are under active development.
-*   [ ] **Application (DAW)**: A long-term goal. Planning and design will begin after the engine layer is stable.
+println!("Successfully saved to output.wav!");
 
-Contributions and feedback are welcome! Feel free to open an issue or submit a pull request.
+Ok(())
+}
+
+This code is self-contained and demonstrates a complete workflow: **Setup -> Generate -> Save**. It highlights how easy it is to get started with the fundamental building blocks of the Squid engine.
+`

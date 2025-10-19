@@ -11,6 +11,17 @@ pub struct WavSpec {
     pub bits_per_sample: u16,
 }
 
+impl WavSpec {
+    pub fn cd_mono() -> Self {
+        Self {
+            audio_format: 1,
+            num_channels: 1,
+            sample_rate: 44100,
+            bits_per_sample: 16,
+        }
+    }
+}
+
 pub struct Wav {
     pub spec: WavSpec,
     pub samples: Vec<f32>,
@@ -115,6 +126,11 @@ impl Wav {
         writer.write_all(&data_bytes)?;
         Ok(())
     }
+}
+
+#[allow(non_snake_case)]
+pub fn Wav(spec: WavSpec) -> Wav {
+    Wav::new(spec)
 }
 
 fn build_header(spec: &WavSpec, data_size: u32) -> [u8; 44] {
