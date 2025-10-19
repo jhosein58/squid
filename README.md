@@ -77,8 +77,8 @@ let mut wav_file = Wav::new(WavSpec::cd_mono());
 // For each step, get the next sample from our oscillator.
 println!("Generating 3 seconds of a 440 Hz sine wave...");
 for _ in 0..(sample_rate * 3) {
-let sample = sine_osc.process();
-wav_file.push_sample(sample);
+    let sample = sine_osc.next_sample();
+    wav_file.push_sample(sample);
 }
 
 // --- 5. Save the Result ---
