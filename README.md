@@ -86,8 +86,6 @@ fn main() {
     wav_file.write_to_path("output.wav").unwrap();
 
     println!("Successfully saved to output.wav!");
-
-    Ok(())
 }
 ```
 This code is self-contained and demonstrates a complete workflow: **Setup -> Generate -> Save**. It highlights how easy it is to get started with the fundamental building blocks of the Squid engine.
