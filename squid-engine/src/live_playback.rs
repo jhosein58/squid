@@ -1,6 +1,6 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-pub struct LivePlayback {
+pub struct LivePlaybackk {
     pub sample_rate: u32,
     pub num_channels: u16,
     device: cpal::Device,
@@ -8,7 +8,7 @@ pub struct LivePlayback {
     stream: Option<cpal::Stream>,
 }
 
-impl LivePlayback {
+impl LivePlaybackk {
     pub fn new() -> Self {
         let host = cpal::default_host();
         let device = host

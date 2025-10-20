@@ -2,6 +2,8 @@ import { AppController } from "./core/AppController.js";
 import { Layout } from "./core/Layout.js";
 import { Oscilloscope } from "./components/Oscilloscope.js";
 
+const invoke = window.__TAURI__.core.invoke;
+
 document.addEventListener("DOMContentLoaded", () => {
   const canvas = document.getElementById("main-canvas");
   const playBtn = document.getElementById("play-btn");
@@ -15,22 +17,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const app = new AppController(canvas);
 
-  const scope = new Oscilloscope(50, 10, 200, 100);
+  const scope = new Oscilloscope(20, 20, 600, 100);
 
   const mixerLayout = new Layout("mixer", [scope]);
   app.addLayout(mixerLayout);
   const workspaceIds = ["mixer"];
 
-  let phase = 0;
   setInterval(() => {
-    const waveform = new Float32Array(256);
-    for (let i = 0; i < waveform.length; i++) {
-      waveform[i] = Math.sin(phase + (i / waveform.length) * 2 * Math.PI * 3);
-    }
-    phase += 0.1;
-
-    scope.setValue(waveform);
-  }, 50);
+    invoke("get_frequency")
+      .then((res) => scope.setValue(res.splice(0, 600)))
+      .catch((err) => console.error("Error:", err));
+  }, 20);
 
   let isPlaying = false;
   function togglePlay() {

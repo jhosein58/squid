@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "squid-ui",
+  "productName": "squid-app",
   "version": "0.1.0",
-  "identifier": "jhosein58",
+  "identifier": "com.jhosein58.squid-app",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "squid-ui",
+        "title": "squid-app",
         "width": 800,
         "height": 600
       }

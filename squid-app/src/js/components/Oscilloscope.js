@@ -1,4 +1,5 @@
 import { BaseComponent } from "../core/BaseComponent.js";
+
 export class Oscilloscope extends BaseComponent {
   _waveformData = [];
 
@@ -25,8 +26,14 @@ export class Oscilloscope extends BaseComponent {
   }
 
   draw(ctx) {
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.rect(this.x, this.y, this.width, this.height);
+
     ctx.fillStyle = this.backgroundColor;
-    ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.fill();
+    ctx.clip();
 
     ctx.strokeStyle = this.strokeColor;
     ctx.lineWidth = this.lineWidth;
@@ -41,24 +48,27 @@ export class Oscilloscope extends BaseComponent {
       ctx.moveTo(this.x, centerY);
       ctx.lineTo(this.x + this.width, centerY);
       ctx.stroke();
+      ctx.restore();
       return;
     }
 
     const centerY = this.y + this.height / 2;
-    const amplitude = this.height / 2;
+    const amplitude = (this.height - this.lineWidth) / 2;
+    const drawableWidth = this.width - this.lineWidth;
+    const xOffset = this.x + this.lineWidth / 2;
 
-    const firstX = this.x;
+    const firstX = xOffset;
     const firstY = centerY - data[0] * amplitude;
     ctx.moveTo(firstX, firstY);
 
     for (let i = 1; i < dataLength; i++) {
-      const xPos = this.x + (i / (dataLength - 1)) * this.width;
-
+      const xPos = xOffset + (i / (dataLength - 1)) * drawableWidth;
       const yPos = centerY - data[i] * amplitude;
-
       ctx.lineTo(xPos, yPos);
     }
 
     ctx.stroke();
+
+    ctx.restore();
   }
 }
