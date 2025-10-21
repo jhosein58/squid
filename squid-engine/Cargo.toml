@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 squid-core = { path = "../squid-core" }
 cpal = "0.16.0"
+ringbuf = "0.4.8"

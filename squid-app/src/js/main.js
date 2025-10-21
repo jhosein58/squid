@@ -1,7 +1,9 @@
 import { AppController } from "./core/AppController.js";
 import { Layout } from "./core/Layout.js";
 import { Oscilloscope } from "./components/Oscilloscope.js";
-
+import { VerticalFader } from "./components/VerticalFader.js";
+import { MasterTrack } from "./components/MasterTrack.js";
+import { MixerChannel } from "./components/MixerChannel.js";
 const invoke = window.__TAURI__.core.invoke;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -17,17 +19,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const app = new AppController(canvas);
 
-  const scope = new Oscilloscope(20, 20, 600, 100);
+  const scope = new Oscilloscope(10, 10, 300, 100);
 
-  const mixerLayout = new Layout("mixer", [scope]);
+  const mixerLayout = new Layout("mixer", [
+    scope,
+    new MasterTrack(10, 120, 80, 400),
+    new MixerChannel(100, 120, 60, 400),
+    new MixerChannel(170, 120, 60, 400),
+    new MixerChannel(240, 120, 60, 400),
+    new MixerChannel(310, 120, 60, 400),
+    new MixerChannel(380, 120, 60, 400),
+    new MixerChannel(450, 120, 60, 400),
+    new MixerChannel(520, 120, 60, 400),
+    new MixerChannel(590, 120, 60, 400),
+    new MixerChannel(660, 120, 60, 400),
+  ]);
   app.addLayout(mixerLayout);
   const workspaceIds = ["mixer"];
-
-  setInterval(() => {
-    invoke("get_frequency")
-      .then((res) => scope.setValue(res.splice(0, 600)))
-      .catch((err) => console.error("Error:", err));
-  }, 20);
 
   let isPlaying = false;
   function togglePlay() {
@@ -55,4 +63,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   switchWorkspace(0);
   app.start();
+
+  window.__TAURI__.event.listen("oscilloscope_waveform", (event) => {
+    scope.setValue(event.payload);
+  });
 });

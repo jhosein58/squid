@@ -118,7 +118,7 @@ export class AppController {
     if (this.isRunning) return;
     console.log("AppController started.");
     this.isRunning = true;
-    this.handleResize(); // Initial setup
+    this.handleResize();
     this._lastTimestamp = 0;
     requestAnimationFrame(this._boundRenderLoop);
   }

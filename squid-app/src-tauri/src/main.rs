@@ -8,35 +8,45 @@ use std::{
     time::Duration,
 };
 
-use squid_app_lib::AppState;
+use squid_app_lib::{app_handle, AppState};
 use squid_core::{
     composite_osc::DualOsc,
     lfo_func_mod::FunctionLFO,
+    mixing::Mixing,
     primetives::{NoiseOsc, SawOsc, SinOsc, SquareOsc},
-    CyclicMod, ModRate, Modulator, Note, Oscillator, PitchClass, Transport, Waveform,
+    CyclicMod, FixedSpscQueue, ModRate, Modulator, Note, Oscillator, PitchClass, Transport,
+    Waveform,
 };
-use squid_engine::LivePlaybackk;
+use squid_engine::{wav::Wav, LivePlaybackk, OscilloscopeTrigger, TriggerEdge};
+use tauri::{AppHandle, Emitter};
 
 fn main() {
-    let app_state = Arc::new(Mutex::new(AppState { freq: Vec::new() }));
+    let sample = Wav::from_path("bk.wav").unwrap();
+    let mut sample_idx: usize = 0;
+    let app_state = Arc::new(FixedSpscQueue::<f32, 512>::new());
     let shared = app_state.clone();
 
     thread::spawn(move || {
         let mut pb = LivePlaybackk::new();
 
-        let mut sine_oscillator = DualOsc(DualOsc(SquareOsc(44100), NoiseOsc(300)), SawOsc(44100));
-        sine_oscillator.set_frequency(Note::new(PitchClass::D, 4).to_frequency().into());
+        let mut sine_oscillator = SinOsc(44100);
+        sine_oscillator.set_frequency(110.);
+        let mut sine_oscillator2 = SinOsc(44100);
+        sine_oscillator2.set_frequency(1300.);
 
         let mut tr = Transport::new(44100., 120.);
-
+        tr.play();
         struct LFOWaveform;
         impl Waveform for LFOWaveform {
             fn process(&self, phase: f32) -> f32 {
-                1. - phase
+                phase
             }
         }
         let mut lfo = FunctionLFO::new(44100., LFOWaveform);
-        lfo.set_rate(ModRate::Hz(2.));
+        lfo.set_rate(ModRate::Hz(0.5));
+
+        let mut trigger_system =
+            OscilloscopeTrigger::<512>::new(shared.clone(), 0.0, TriggerEdge::Rising);
 
         pb.build_stream(Box::new(move |data| {
             let num_frames = data.len() / pb.num_channels as usize;
@@ -44,8 +54,15 @@ fn main() {
             for frame_index in 0..num_frames {
                 tr.tick();
                 lfo.tick(&mut tr);
-                let value = sine_oscillator.next_sample() * lfo.value();
+                let value = if let Some(sample) = sample.samples.get(sample_idx) {
+                    sample_idx += 1;
+                    *sample
+                } else {
+                    sample_idx = 0;
+                    0.0
+                };
 
+                trigger_system.process_sample(value);
                 for channel_index in 0..pb.num_channels {
                     let sample_index =
                         frame_index * pb.num_channels as usize + channel_index as usize;
@@ -53,8 +70,14 @@ fn main() {
                 }
             }
 
-            let mut guard = shared.lock().unwrap();
-            (*guard).freq = data.to_vec();
+            let mut res = Vec::with_capacity(512);
+            while let Some(v) = shared.pop() {
+                res.push(v);
+            }
+
+            if let Some(app) = app_handle() {
+                app.emit("oscilloscope_waveform", res).unwrap();
+            }
         }));
 
         loop {

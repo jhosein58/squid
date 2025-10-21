@@ -26,6 +26,9 @@ export class Layout {
         component.draw(ctx);
       }
     }
+    for (const component of this.components) {
+      if (component.drawOverlay) component.drawOverlay(ctx);
+    }
   }
 
   clearUpdateFlags() {
@@ -42,40 +45,40 @@ export class Layout {
 
   handleMouseDown(event) {
     for (const component of this.components) {
-      if (component.handleMouseDown) {
-        component.handleMouseDown(event);
+      if (component.onMouseDown) {
+        component.onMouseDown(event);
       }
     }
   }
 
   handleMouseMove(event) {
     for (const component of this.components) {
-      if (component.handleMouseMove) {
-        component.handleMouseMove(event);
+      if (component.onMouseMove) {
+        component.onMouseMove(event);
       }
     }
   }
 
   handleMouseUp(event) {
     for (const component of this.components) {
-      if (component.handleMouseUp) {
-        component.handleMouseUp(event);
+      if (component.onMouseUp) {
+        component.onMouseUp(event);
       }
     }
   }
 
   handleKeyDown(event) {
     for (const component of this.components) {
-      if (component.handleKeyDown) {
-        component.handleKeyDown(event);
+      if (component.onKeyDown) {
+        component.onKeyDown(event);
       }
     }
   }
 
   handleKeyUp(event) {
     for (const component of this.components) {
-      if (component.handleKeyUp) {
-        component.handleKeyUp(event);
+      if (component.onKeyUp) {
+        component.onKeyUp(event);
       }
     }
   }

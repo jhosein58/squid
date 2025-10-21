@@ -8,6 +8,7 @@ pub mod modulator;
 pub mod note;
 pub mod oscillator;
 pub mod processor;
+pub mod telemetry;
 pub mod timing;
 
 pub use buffer::*;
@@ -18,4 +19,5 @@ pub use modulator::*;
 pub use note::*;
 pub use oscillator::*;
 pub use processor::*;
+pub use telemetry::*;
 pub use timing::*;
