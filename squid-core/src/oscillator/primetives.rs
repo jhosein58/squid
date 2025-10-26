@@ -41,6 +41,10 @@ impl Oscillator for NoiseOsc {
     fn set_frequency(&mut self, _frequency: f32) {}
 
     fn reset(&mut self) {}
+    fn set_phase(&mut self, _: f32) {}
+    fn get_phase(&self) -> f32 {
+        0.
+    }
 }
 
 #[allow(non_snake_case)]

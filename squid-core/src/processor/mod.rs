@@ -10,7 +10,7 @@ pub mod passthrough_proc;
 pub mod pitchs_proc;
 pub mod saturator_proc;
 
-pub trait Processor {
+pub trait Processor: Send {
     fn process(&mut self, input: f32) -> f32;
     fn reset(&mut self);
 }

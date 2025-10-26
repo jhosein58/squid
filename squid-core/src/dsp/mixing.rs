@@ -34,4 +34,15 @@ impl Mixing {
         let sum = Self::weighted_sum(signals, gains);
         Self::saturate(sum, drive)
     }
+
+    pub fn constant_power_pan(signal: f32, pan: f32) -> [f32; 2] {
+        let normalized_pan = (pan.clamp(-1.0, 1.0) + 1.0) * 0.5;
+
+        let angle = normalized_pan * FRAC_PI_2;
+
+        let left_gain = cosf(angle);
+        let right_gain = sinf(angle);
+
+        [signal * left_gain, signal * right_gain]
+    }
 }

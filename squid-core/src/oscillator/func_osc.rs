@@ -39,7 +39,8 @@ where
     F: Fn(f32) -> f32 + Send + Sync + 'static,
 {
     fn set_frequency(&mut self, frequency: f32) {
-        self.phase_increment = frequency / self.sample_rate;
+        let freq = if frequency < 0.0 { 0.0 } else { frequency };
+        self.phase_increment = freq / self.sample_rate;
     }
 
     fn next_sample(&mut self) -> f32 {
@@ -51,6 +52,14 @@ where
 
     fn reset(&mut self) {
         self.phase = 0.0;
+    }
+
+    fn get_phase(&self) -> f32 {
+        self.phase
+    }
+
+    fn set_phase(&mut self, phase: f32) {
+        self.phase = phase - floorf(phase);
     }
 }
 #[macro_export]
@@ -81,6 +90,14 @@ macro_rules! define_oscillator {
             pub fn reset(&mut self) {
                 self.oscillator.reset();
             }
+
+            pub fn get_phase(&self) -> f32 {
+                self.oscillator.get_phase()
+            }
+
+            pub fn set_phase(&mut self, phase: f32) {
+                self.oscillator.set_phase(phase);
+            }
         }
 
         impl<F> $crate::oscillator::Oscillator for $struct_name<F>
@@ -97,6 +114,14 @@ macro_rules! define_oscillator {
 
             fn reset(&mut self) {
                 self.oscillator.reset();
+            }
+
+            fn get_phase(&self) -> f32 {
+                self.oscillator.get_phase()
+            }
+
+            fn set_phase(&mut self, phase: f32) {
+                self.oscillator.set_phase(phase);
             }
         }
 

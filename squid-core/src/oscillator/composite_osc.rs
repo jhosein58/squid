@@ -38,6 +38,14 @@ impl<I: Oscillator, J: Oscillator> Oscillator for DualOsc<I, J> {
         self.a_osc.reset();
         self.b_osc.reset();
     }
+
+    fn set_phase(&mut self, phase: f32) {
+        self.a_osc.set_phase(phase);
+        self.b_osc.set_phase(phase);
+    }
+    fn get_phase(&self) -> f32 {
+        (self.a_osc.get_phase() + self.b_osc.get_phase()) / 2.
+    }
 }
 #[allow(non_snake_case)]
 pub fn DualOsc<I: Oscillator, J: Oscillator>(a: I, b: J) -> DualOsc<I, J> {

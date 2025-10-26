@@ -72,6 +72,16 @@ impl<T, const N: usize> FixedSpscQueue<T, N> {
         self.head.store(0, Ordering::Release);
         self.tail.store(0, Ordering::Release);
     }
+
+    #[inline]
+    pub fn peek(&self) -> Option<&T> {
+        let tail = self.tail.load(Ordering::Relaxed);
+        if tail == self.head.load(Ordering::Acquire) {
+            return None;
+        }
+        let val_ref = unsafe { (*self.buffer.get_unchecked(tail).get()).assume_init_ref() };
+        Some(val_ref)
+    }
 }
 
 impl<T, const N: usize> Drop for FixedSpscQueue<T, N> {
