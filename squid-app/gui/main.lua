@@ -1,26 +1,54 @@
+---@diagnostic disable: lowercase-global
+require("gui/globals")
+
+local VF = require("gui/components/vfader")
+local Text = require("gui/components/text")
+
+local fader = VF:new({ x = 425, y = 100, width = 25, height = 100 })
+local text = Text:new({ text = "Sin Waveform", x = 100, y = 80, size = 25})
+local t2 = Text:new({ text = "Sin Waveform", x = 100, y = 220, size = 22, color = {r = 255, g = 0, b = 0, a = 255} })
+local x = 0;
+local t = 0
+
+
+phase = phase or 0
+p_s = 0;
+fader:on_change(function (v) p_s = v end)
 function update()
-    local w = get_screen_width()
-    local h = get_screen_height()
-    local mx, my = get_mouse_pos()
-    local t = os.clock()
-    local hue_shift = (math.sin(t) * 0.5 + 0.5)
-    local mouse_ratio_x = mx / w
-    local mouse_ratio_y = my / h
+    local data = {}
+    local sample_count = 100
+    local freq = 3
+ local speed = 20 * p_s
 
-    for i = 0, 30000 do
-        local cx = (math.sin(t + i * 0.2) * 0.5 + 0.5) * w
-        local cy = (math.cos(t * 0.6 + i * 0.3) * 0.5 + 0.5) * h
 
-        local sz = 20 + 30 * mouse_ratio_y + math.sin(t + i) * 10
-        local r = math.abs(math.sin(i * 0.3 + hue_shift + mouse_ratio_x)) * 255
-        local g = math.abs(math.sin(i * 0.4 + hue_shift + mouse_ratio_y)) * 255
-        local b = math.abs(math.cos(i * 0.5 + hue_shift)) * 255
+    phase = phase + get_delta_time() * speed
 
-        draw_rect({ x = cx - sz / 2, y = cy - sz / 2, width = sz, height = sz }, { r = r, g = g, b = b, a = 255 })
+    for i = 1, sample_count do
+        local t = (i / sample_count) * (math.pi * 2 * freq)
+        data[i] = math.sin(t + phase)
     end
-
     draw_rect(
-        { x = 0, y = 0, width = w, height = h },
-        { r = mouse_ratio_x * 80, g = mouse_ratio_y * 80, b = 100, a = 80 }
+      { x = 100, y = 100, width = 300, height = 100 },
+      { r = 0, g = 0, b = 0, a = 255 }
     )
+
+    draw_waveform(
+      {
+        x = 100,
+        y = 100,
+        width = 300,
+        height = 100,
+        thickness = 3,
+        data = data,
+      },
+      { r = 0, g = 220, b = 120, a = 255 }
+    )
+
+    fader:update()
+    fader:draw()
+    fader:draw_overlay()
+
+    text:draw()
+    t2.text = "current speed: " .. speed
+    t2:draw()
 end
