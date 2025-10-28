@@ -20,7 +20,7 @@ function BaseComponent:extend()
 end
 
 function BaseComponent:is_hovered()
-    local x, y = get_mouse_pos()
+    local x, y = engine.get_mouse_pos()
     return x >= self.x and x <= self.x + self.width and y >= self.y and y <= self.y + self.height
 end
 

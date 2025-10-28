@@ -13,7 +13,7 @@ function Rect:new(prop)
 end
 
 function Rect:draw()
-    draw_rect({
+    engine.draw_rect({
         x = self.x,
         y = self.y,
         width = self.width,

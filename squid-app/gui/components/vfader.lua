@@ -14,7 +14,7 @@ function VFader:new(prop)
     obj.value = prop.value or 0
     obj.last_value = obj.value
     obj.toggle = false;
-    obj.on_change_cb = function (v) end
+    obj.on_change_cb = function(v) end
 
     return obj
 end
@@ -25,15 +25,15 @@ function VFader:update()
         local c = self.on_change_cb
         c(self.value)
     end
-    if is_mouse_down("left") and self:is_hovered() then
+    if engine.is_mouse_down("left") and self:is_hovered() then
         self.toggle = true
     end
-    if self.toggle and not is_mouse_down("left") then
+    if self.toggle and not engine.is_mouse_down("left") then
         self.toggle = false
     end
     if self.toggle then
         local bottom = self.y + self.height;
-        local mx, my = get_mouse_pos();
+        local mx, my = engine.get_mouse_pos();
 
         if my >= bottom then
             self.value = 0
@@ -53,7 +53,7 @@ function VFader:on_change(callback)
 end
 
 function VFader:draw()
-    draw_rect({
+    engine.draw_rect({
         x = self.x,
         y = self.y,
         width = self.width,
@@ -61,7 +61,7 @@ function VFader:draw()
     }, self.bg)
 
     local iy = (1 - self.value) * self.height
-    draw_rect({
+    engine.draw_rect({
         x = self.x,
         y = self.y + iy,
         width = self.width,
@@ -71,9 +71,8 @@ end
 
 function VFader:draw_overlay()
     if self.toggle then
-        local mx, my = get_mouse_pos();
-        draw_text(self.value, {x = mx - 2, y = my - 2, size = 22}, {r = 0, g = 0, b = 0})
-
+        local mx, my = engine.get_mouse_pos();
+        engine.draw_text(self.value, { x = mx - 2, y = my - 2, size = 22 }, { r = 0, g = 0, b = 0 })
     end
 end
 

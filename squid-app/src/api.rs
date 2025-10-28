@@ -1,20 +1,27 @@
+use std::sync::Arc;
+
 use macroquad::prelude::*;
 use mlua::Lua;
+use squid_core::{Event, EventData};
+use squid_engine::StreamContext;
 
 macro_rules! lua_fn {
-    ($lua:expr, $name:expr, $closure:expr) => {{
+    ($lua:expr, $table:expr, $name:expr, $closure:expr) => {{
         let f = $lua.create_function($closure).unwrap();
-        $lua.globals().set($name, f).unwrap();
+        $table.set($name, f).unwrap();
     }};
 }
 
 pub struct UiApi;
 
 impl UiApi {
-    pub fn add_api_to_lua(lua: &Lua) {
+    pub fn add_api_to_lua(lua: &Lua, app_state: Arc<StreamContext>) {
+        let engine = lua.create_table().unwrap();
+        lua.globals().set("engine", engine.clone()).unwrap();
+
         // --- draw_rect ---
-        lua_fn!(lua, "draw_rect", |_,
-                                   (prop, color): (
+        lua_fn!(lua, engine, "draw_rect", |_,
+                                           (prop, color): (
             mlua::Table,
             mlua::Table
         )| {
@@ -32,19 +39,24 @@ impl UiApi {
             Ok(())
         });
         // --- get_width ---
-        lua_fn!(lua, "get_screen_with", |_, ()| Ok(screen_width()));
+        lua_fn!(lua, engine, "get_screen_with", |_, ()| Ok(screen_width()));
 
         // --- get_height ---
-        lua_fn!(lua, "get_screen_height", |_, ()| Ok(screen_height()));
+        lua_fn!(
+            lua,
+            engine,
+            "get_screen_height",
+            |_, ()| Ok(screen_height())
+        );
 
         // --- get_mouse_pos ---
-        lua_fn!(lua, "get_mouse_pos", |_, ()| {
+        lua_fn!(lua, engine, "get_mouse_pos", |_, ()| {
             let (x, y) = mouse_position();
             Ok((x, y))
         });
 
         // --- is_mouse_down(btn) ---
-        lua_fn!(lua, "is_mouse_down", |_, btn: String| {
+        lua_fn!(lua, engine, "is_mouse_down", |_, btn: String| {
             let pressed = match btn.as_str() {
                 "left" => is_mouse_button_down(MouseButton::Left),
                 "right" => is_mouse_button_down(MouseButton::Right),
@@ -55,8 +67,8 @@ impl UiApi {
         });
 
         // --- draw_circle ---
-        lua_fn!(lua, "draw_circle", |_,
-                                     (prop, color): (
+        lua_fn!(lua, engine, "draw_circle", |_,
+                                             (prop, color): (
             mlua::Table,
             mlua::Table
         )| {
@@ -76,8 +88,8 @@ impl UiApi {
         });
 
         // --- draw_line ---
-        lua_fn!(lua, "draw_line", |_,
-                                   (prop, color): (
+        lua_fn!(lua, engine, "draw_line", |_,
+                                           (prop, color): (
             mlua::Table,
             mlua::Table
         )| {
@@ -99,8 +111,8 @@ impl UiApi {
         });
 
         // --- draw_text ---
-        lua_fn!(lua, "draw_text", |_,
-                                   (text, prop, color): (
+        lua_fn!(lua, engine, "draw_text", |_,
+                                           (text, prop, color): (
             String,
             mlua::Table,
             mlua::Table
@@ -121,7 +133,7 @@ impl UiApi {
         });
 
         // --- is_key_down ---
-        lua_fn!(lua, "is_key_down", |_, key: String| {
+        lua_fn!(lua, engine, "is_key_down", |_, key: String| {
             use macroquad::input::KeyCode;
             let k = key.to_lowercase();
 
@@ -227,18 +239,20 @@ impl UiApi {
         });
 
         // --- get_pressed_keys ---
-        lua_fn!(lua, "get_pressed_keys", |_, ()| {
+        lua_fn!(lua, engine, "get_pressed_keys", |_, ()| {
             use macroquad::input::get_keys_down;
             let keys: Vec<String> = get_keys_down().iter().map(|k| format!("{:?}", k)).collect();
             Ok(keys)
         });
 
         // --- get_delta_time ---
-        lua_fn!(lua, "get_delta_time", |_, ()| { Ok(get_frame_time()) });
+        lua_fn!(lua, engine, "get_delta_time", |_, ()| {
+            Ok(get_frame_time())
+        });
 
         // --- draw_waveform ---
-        lua_fn!(lua, "draw_waveform", |_,
-                                       (prop, color): (
+        lua_fn!(lua, engine, "draw_waveform", |_,
+                                               (prop, color): (
             mlua::Table,
             mlua::Table
         )| {
@@ -247,7 +261,8 @@ impl UiApi {
             let w = prop.get::<f32>("width").unwrap_or(0.);
             let h = prop.get::<f32>("height").unwrap_or(0.);
             let thickness = prop.get::<f32>("thickness").unwrap_or(1.);
-            let data = prop.get::<Vec<f32>>("data").unwrap_or(Vec::new());
+
+            let data = prop.get::<Vec<f32>>("data")?;
 
             let red = color.get::<f32>("r").unwrap_or(0.) / 255.0;
             let green = color.get::<f32>("g").unwrap_or(0.) / 255.0;
@@ -255,24 +270,59 @@ impl UiApi {
             let alpha = color.get::<f32>("a").unwrap_or(255.) / 255.0;
             let c = Color::new(red, green, blue, alpha);
 
-            if data.is_empty() {
+            if data.len() < 2 {
                 return Ok(());
             }
 
-            let lw = w / (data.len().saturating_sub(1)) as f32;
+            let step_x = w / (data.len() - 1) as f32;
 
-            let mut last_x = x;
-            let mut last_y = y + ((1.0 - data[0]) / 2.0) * h;
+            for (i, points) in data.windows(2).enumerate() {
+                let p1_val = points[0].clamp(-1.0, 1.0);
+                let p2_val = points[1].clamp(-1.0, 1.0);
 
-            for (i, &d) in data.iter().enumerate() {
-                let current_x = x + (i as f32 * lw);
-                let current_y = y + ((1.0 - d) / 2.0) * h;
-                draw_line(last_x, last_y, current_x, current_y, thickness, c);
-                last_x = current_x;
-                last_y = current_y;
+                let x1 = x + (i as f32 * step_x);
+                let y1 = y + ((-p1_val + 1.0) / 2.0) * h;
+
+                let x2 = x + ((i + 1) as f32 * step_x);
+                let y2 = y + ((-p2_val + 1.0) / 2.0) * h;
+
+                draw_line(x1, y1, x2, y2, thickness, c);
             }
 
             Ok(())
         });
+
+        let shared_st = app_state.clone();
+        // --- send_note_on_event ---
+        lua_fn!(
+            lua,
+            engine,
+            "send_note_on_event",
+            move |_, (note): (f32)| {
+                let _ = shared_st.events.push(Event {
+                    timing: 0,
+                    data: EventData::NoteOn {
+                        note: note as u8,
+                        velocity: 0,
+                    },
+                });
+                Ok(())
+            }
+        );
+
+        let shared_st = app_state.clone();
+        // --- send_note_off_event ---
+        lua_fn!(
+            lua,
+            engine,
+            "send_note_off_event",
+            move |_, (note): (f32)| {
+                let _ = shared_st.events.push(Event {
+                    timing: 0,
+                    data: EventData::NoteOff { note: note as u8 },
+                });
+                Ok(())
+            }
+        );
     }
 }

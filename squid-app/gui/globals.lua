@@ -1,63 +1,48 @@
 ---@diagnostic disable: lowercase-global
 
+if not engine then
+    engine = {}
+    engine.__index = engine
 
-if not get_screen_width then
     ---@type fun():number
-    function get_screen_width() return 0 end
-end
+    function engine.get_screen_width() return 0 end
 
-if not get_screen_height then
     ---@type fun():number
-    function get_screen_height() return 0 end
-end
+    function engine.get_screen_height() return 0 end
 
-
-if not get_mouse_pos then
     ---@type fun():number, number
-    function get_mouse_pos() return 0, 0 end
-end
+    function engine.get_mouse_pos() return 0, 0 end
 
-if not is_mouse_down then
     ---@type fun(button: string): boolean
-    function is_mouse_down(button) return false end
-end
+    function engine.is_mouse_down(button) return false end
 
-if not draw_rect then
     ---@type fun(prop, color)
-    function draw_rect(prop, color) end
-end
+    function engine.draw_rect(prop, color) end
 
-if not draw_circle then
     ---@type fun(prop, color)
-    function draw_circle(prop, color) end
-end
+    function engine.draw_circle(prop, color) end
 
-if not draw_line then
     ---@type fun(prop, color)
-    function draw_line(prop, color) end
-end
+    function engine.draw_line(prop, color) end
 
-if not draw_text then
     ---@type fun(text, x, y, color)
-    function draw_text(text, x, y, color) end
-end
+    function engine.draw_text(text, x, y, color) end
 
-if not is_key_down then
     ---@type fun(key: string): boolean
-    function is_key_down(key) return false end
-end
+    function engine.is_key_down(key) return false end
 
-if not get_pressed_keys then
     ---@type fun(): string[]
-    function get_pressed_keys() return {} end
-end
+    function engine.get_pressed_keys() return {} end
 
-if not get_delta_time then
     ---@type fun(): number
-    function get_delta_time() return 0 end
-end
+    function engine.get_delta_time() return 0 end
 
-if not draw_waveform then
-     ---@type fun(prop)
-     function draw_waveform(p) end
+    ---@type fun(prop, color)
+    function engine.draw_waveform(p, color) end
+
+    ---@type fun(note)
+    function engine.send_note_on_event(note) end
+
+    ---@type fun(note)
+    function engine.send_note_off_event(note) end
 end

@@ -15,7 +15,7 @@ function Text:new(prop)
 end
 
 function Text:draw()
-    draw_text(self.text, {
+    engine.draw_text(self.text, {
         x = self.x,
         y = self.y,
         size = self.size,
