@@ -2,7 +2,7 @@ require("gui/globals")
 
 local BaseComponent = require("gui/core/base_component");
 
-local Text = BaseComponent:extend()
+Text = BaseComponent:extend()
 
 
 function Text:new(prop)
@@ -14,12 +14,10 @@ function Text:new(prop)
     return obj
 end
 
-function Text:draw()
+function Text:draw(my_abs_x, my_abs_y)
     engine.draw_text(self.text, {
-        x = self.x,
-        y = self.y,
+        x = my_abs_x,
+        y = my_abs_y,
         size = self.size,
     }, self.color)
 end
-
-return Text

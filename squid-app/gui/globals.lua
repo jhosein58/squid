@@ -45,4 +45,16 @@ if not engine then
 
     ---@type fun(note)
     function engine.send_note_off_event(note) end
+
+    ---@type fun(prop, color)
+    function engine.draw_rounded_rect(prop, color) end
+
+    ---@type fun(prop, color, border_color)
+    function engine.draw_bordered_rounded_rect(prop, color, border_color) end
+
+    ---@type fun(path)
+    function engine.load_texture(path) end
+
+    ---@type fun(prop)
+    function engine.draw_texture(prop) end
 end

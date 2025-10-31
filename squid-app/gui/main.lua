@@ -1,46 +1,25 @@
 ---@diagnostic disable: lowercase-global
 require("gui/globals")
+require("gui/core/layout")
+require("gui/components/prelude")
+require("gui/core/size")
+
 
 local EventManager = require("gui/core/event_manager")
 local event_manager = EventManager:new()
 
-local Oscilloscope = require("gui/components/oscilloscope")
-local oscilloscope = Oscilloscope:new({ x = 100, y = 80, width = 500, height = 200, thickness = 3, color = { r = 255, g = 190, b = 0 } })
+local oscilloscope = Oscilloscope:new({ x = 50, y = 50, width = 300, height = 100, thickness = 2, color = { r = 0, g = 190, b = 80, a = 255 }, border_radius = 8, })
+my_vectorscope = Vectorscope:new({
+    x = 50,
+    y = 50,
+    width = 400,
+    height = 400,
+    trail_duration = 0.1,
+    max_trail_points = 100,
+    lc = { r = 0, g = 255, b = 180, a = 255 }
+})
 
-local keyToNote = {
-    ["Z"] = 60,
-    ["S"] = 61,
-    ["X"] = 62,
-    ["D"] = 63,
-    ["C"] = 64,
-    ["V"] = 65,
-    ["G"] = 66,
-    ["B"] = 67,
-    ["H"] = 68,
-    ["N"] = 69,
-    ["J"] = 70,
-    ["M"] = 71,
-
-    ["Q"] = 72,
-    ["2"] = 73,
-    ["W"] = 74,
-    ["3"] = 75,
-    ["E"] = 76,
-    ["R"] = 77,
-    ["5"] = 78,
-    ["T"] = 79,
-    ["6"] = 80,
-    ["Y"] = 81,
-    ["7"] = 82,
-    ["U"] = 83,
-    ["I"] = 84,
-    ["9"] = 85,
-    ["O"] = 86,
-    ["0"] = 87,
-    ["P"] = 88,
-};
-
-
+keyToNote = require("gui/core/note_map")
 event_manager:on_key_down(function(t)
     if keyToNote[tostring(t)] then
         engine.send_note_on_event(keyToNote[tostring(t)])
@@ -53,15 +32,36 @@ event_manager:on_key_up(function(t)
     end
 end)
 
-function waveform(d)
-    oscilloscope.data = d;
+left = { 0, 0 }
+right = { 0, 0 }
+mono = { 0, 0 }
+function waveform(data)
+    local li, ri = 1, 1
+    for i = 1, #data, 2 do
+        left[li] = data[i]
+        right[ri] = data[i + 1]
+        mono[li] = (data[i] + (data[i + 1] or data[i])) / 2 -- fallback if missing
+        li = li + 1
+        ri = ri + 1
+    end
+    if #data == 0 then
+        left = { 0, 0 }
+        right = { 0, 0 }
+        mono = { 0, 0 }
+    end
+
+    TopBarScope.data = mono
 end
 
+local topbar_layout = require("gui/layouts/topbar")
+
 function update()
-    local mx, my = engine.get_mouse_pos();
-    oscilloscope.x = mx;
-    oscilloscope.y = my
-    oscilloscope:draw()
+    local sw, sh = engine.get_screen_width(), engine.get_screen_height()
+    topbar_layout.width = sw
+    topbar_layout.height = 48
+    topbar_layout:draw()
+
+
 
     event_manager:update()
 end

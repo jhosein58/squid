@@ -9,5 +9,5 @@ squid-core = { path = "../squid-core" }
 squid-engine = { path = "../squid-engine" }
 
 macroquad = "0.4.14"
-mlua = {version = "0.11.4", features = ["luajit", "macros"]}
+mlua = {version = "0.11.4", features = ["luajit", "async",  "macros"]}
 #mlua = {version = "0.11.4", features = ["lua54", "vendored"]}

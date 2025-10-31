@@ -1,7 +1,10 @@
-use std::sync::Arc;
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
-use macroquad::prelude::*;
-use mlua::Lua;
+use macroquad::{prelude::*, texture};
+use mlua::{FromLua, Lua, Table};
 use squid_core::{Event, EventData};
 use squid_engine::StreamContext;
 
@@ -12,10 +15,129 @@ macro_rules! lua_fn {
     }};
 }
 
-pub struct UiApi;
+macro_rules! lua_fn_async {
+    ($lua:expr, $table:expr, $name:expr, $closure:expr) => {{
+        let f = $lua.create_async_function($closure).unwrap();
+        $table.set($name, f).unwrap();
+    }};
+}
 
-impl UiApi {
-    pub fn add_api_to_lua(lua: &Lua, app_state: Arc<StreamContext>) {
+pub struct RuntimeApi {
+    texture_cache: Arc<Mutex<HashMap<String, Texture2D>>>,
+}
+
+impl RuntimeApi {
+    pub fn new() -> Self {
+        Self {
+            texture_cache: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+    pub fn get_or<T>(tbl: &mlua::Table, val: &str, default: T) -> T
+    where
+        T: FromLua,
+    {
+        tbl.get::<T>(val).unwrap_or(default)
+    }
+    pub fn parse_color_table(color_table: &mlua::Table) -> macroquad::color::Color {
+        let r = Self::get_or(color_table, "r", 0.0) / 255.0;
+        let g = Self::get_or(color_table, "g", 0.0) / 255.0;
+        let b = Self::get_or(color_table, "b", 0.0) / 255.0;
+        let a = Self::get_or(color_table, "a", 255.0) / 255.0;
+        macroquad::color::Color::new(r, g, b, a)
+    }
+
+    pub fn draw_simple_rect(x: f32, y: f32, w: f32, h: f32, color: macroquad::color::Color) {
+        draw_rectangle(x, y, w, h, color);
+    }
+    pub fn draw_rounded_rect(
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        color: macroquad::color::Color,
+    ) {
+        let rt = render_target(w as u32, h as u32);
+
+        set_camera(&Camera2D {
+            target: vec2(w / 2.0, h / 2.0),
+            zoom: vec2(2.0 / w, -2.0 / h),
+            ..Default::default()
+        });
+        rt.texture.set_filter(FilterMode::Linear);
+
+        set_camera(&Camera2D {
+            target: vec2(w / 2.0, h / 2.0),
+            zoom: vec2(2.0 / w, -2.0 / h),
+            render_target: Some(rt.clone()),
+            ..Default::default()
+        });
+
+        clear_background(Color::new(0., 0., 0., 0.));
+
+        draw_rectangle(radius, 0., w - 2.0 * radius, h, WHITE);
+        draw_rectangle(0., radius, w, h - 2.0 * radius, WHITE);
+        draw_circle(radius, radius, radius, WHITE);
+        draw_circle(w - radius, radius, radius, WHITE);
+        draw_circle(radius, h - radius, radius, WHITE);
+        draw_circle(w - radius, h - radius, radius, WHITE);
+
+        set_default_camera();
+
+        draw_texture_ex(
+            &rt.texture,
+            x,
+            y,
+            color,
+            DrawTextureParams {
+                dest_size: Some(vec2(w, h)),
+                ..Default::default()
+            },
+        );
+    }
+
+    pub fn draw_bordered_rounded_rect(
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        radius: f32,
+        border_width: f32,
+        border_color: Color,
+        color: Color,
+    ) {
+        if radius > 0. {
+            if border_width > 0. && border_color.a != 0. {
+                Self::draw_rounded_rect(x, y, w, h, radius, border_color);
+
+                let inner_x = x + border_width;
+                let inner_y = y + border_width;
+                let inner_w = w - border_width * 2.0;
+                let inner_h = h - border_width * 2.0;
+
+                let inner_radius = (radius - border_width).max(0.0);
+
+                Self::draw_rounded_rect(inner_x, inner_y, inner_w, inner_h, inner_radius, color);
+            } else {
+                Self::draw_rounded_rect(x, y, w, h, radius, color);
+            }
+        } else {
+            if border_width > 0. && border_color.a != 0. {
+                Self::draw_simple_rect(x, y, w, h, border_color);
+
+                let inner_x = x + border_width;
+                let inner_y = y + border_width;
+                let inner_w = w - border_width * 2.0;
+                let inner_h = h - border_width * 2.0;
+
+                Self::draw_simple_rect(inner_x, inner_y, inner_w, inner_h, color);
+            } else {
+                Self::draw_simple_rect(x, y, w, h, color);
+            }
+        }
+    }
+
+    pub fn add_api_to_lua(&mut self, lua: &Lua, app_state: Arc<StreamContext>) {
         let engine = lua.create_table().unwrap();
         lua.globals().set("engine", engine.clone()).unwrap();
 
@@ -25,21 +147,63 @@ impl UiApi {
             mlua::Table,
             mlua::Table
         )| {
-            let x = prop.get::<f32>("x").unwrap_or(0.);
-            let y = prop.get::<f32>("y").unwrap_or(0.);
-            let w = prop.get::<f32>("width").unwrap_or(0.);
-            let h = prop.get::<f32>("height").unwrap_or(0.);
+            let x = Self::get_or(&prop, "x", 0.);
+            let y = Self::get_or(&prop, "y", 0.);
+            let w = Self::get_or(&prop, "width", 0.);
+            let h = Self::get_or(&prop, "height", 0.);
 
-            let r = color.get::<f32>("r").unwrap_or(0.) / 255.0;
-            let g = color.get::<f32>("g").unwrap_or(0.) / 255.0;
-            let b = color.get::<f32>("b").unwrap_or(0.) / 255.0;
-            let a = color.get::<f32>("a").unwrap_or(255.) / 255.0;
+            let c = Self::parse_color_table(&color);
 
-            draw_rectangle(x, y, w, h, Color::new(r, g, b, a));
+            Self::draw_simple_rect(x, y, w, h, c);
+
             Ok(())
         });
+
+        // --- draw_rounded_rect ---
+        lua_fn!(lua, engine, "draw_rounded_rect", |_,
+                                                   (prop, color): (
+            mlua::Table,
+            mlua::Table
+        )| {
+            let x = Self::get_or(&prop, "x", 0.);
+            let y = Self::get_or(&prop, "y", 0.);
+            let w = Self::get_or(&prop, "width", 0.);
+            let h = Self::get_or(&prop, "height", 0.);
+            let radius = Self::get_or(&prop, "radius", 0.);
+            let color = Self::parse_color_table(&color);
+
+            Self::draw_rounded_rect(x, y, w, h, radius, color);
+
+            Ok(())
+        });
+
+        // --- draw_bordered_rounded_rect ---
+        lua_fn!(lua, engine, "draw_bordered_rounded_rect", |_,
+                                                            (
+            prop,
+            color,
+            border_color,
+        ): (
+            mlua::Table,
+            mlua::Table,
+            mlua::Table
+        )| {
+            let x = Self::get_or(&prop, "x", 0.);
+            let y = Self::get_or(&prop, "y", 0.);
+            let w = Self::get_or(&prop, "width", 0.);
+            let h = Self::get_or(&prop, "height", 0.);
+            let border_width = Self::get_or(&prop, "border_width", 0.);
+            let radius = Self::get_or(&prop, "radius", 0.);
+            let color = Self::parse_color_table(&color);
+            let border_color = Self::parse_color_table(&border_color);
+
+            Self::draw_bordered_rounded_rect(x, y, w, h, radius, border_width, border_color, color);
+
+            Ok(())
+        });
+
         // --- get_width ---
-        lua_fn!(lua, engine, "get_screen_with", |_, ()| Ok(screen_width()));
+        lua_fn!(lua, engine, "get_screen_width", |_, ()| Ok(screen_width()));
 
         // --- get_height ---
         lua_fn!(
@@ -312,17 +476,51 @@ impl UiApi {
 
         let shared_st = app_state.clone();
         // --- send_note_off_event ---
-        lua_fn!(
-            lua,
-            engine,
-            "send_note_off_event",
-            move |_, (note): (f32)| {
-                let _ = shared_st.events.push(Event {
-                    timing: 0,
-                    data: EventData::NoteOff { note: note as u8 },
-                });
-                Ok(())
+        lua_fn!(lua, engine, "send_note_off_event", move |_, note: f32| {
+            let _ = shared_st.events.push(Event {
+                timing: 0,
+                data: EventData::NoteOff { note: note as u8 },
+            });
+            Ok(())
+        });
+
+        let texture_cache = self.texture_cache.clone();
+        // --- load_texture ---
+        lua_fn!(lua, engine, "load_texture", move |_, path: String| {
+            let mut texture_cache = texture_cache.lock().unwrap();
+            if let None = texture_cache.get(&path) {
+                let bytes = std::fs::read(&path).expect("cannot read image file");
+                let texture = Texture2D::from_file_with_format(&bytes, Some(ImageFormat::Png));
+                texture.set_filter(FilterMode::Linear);
+                texture_cache.insert(path, texture);
             }
-        );
+            Ok(())
+        });
+
+        let texture_cache = self.texture_cache.clone();
+        // --- draw_texture ---
+        lua_fn!(lua, engine, "draw_texture", move |_, prop: Table| {
+            let texture_cache = texture_cache.lock().unwrap();
+            let path = Self::get_or(&prop, "path", String::new());
+            let x = Self::get_or(&prop, "x", 0.0);
+            let y = Self::get_or(&prop, "y", 0.0);
+            let width = Self::get_or(&prop, "width", 0.0);
+            let height = Self::get_or(&prop, "height", 0.0);
+
+            if let Some(texture) = texture_cache.get(&path) {
+                draw_texture_ex(
+                    texture,
+                    x,
+                    y,
+                    WHITE,
+                    DrawTextureParams {
+                        dest_size: Some(vec2(width, height)),
+                        ..Default::default()
+                    },
+                );
+            }
+
+            Ok(())
+        });
     }
 }
