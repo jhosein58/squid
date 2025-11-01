@@ -4,12 +4,20 @@ require("gui/core/layout")
 require("gui/components/prelude")
 require("gui/core/size")
 require("gui/core/animator")
+require("gui/core/update_manager")
+require("gui/core/event/event_manager")
 
-local EventManager = require("gui/core/event_manager")
-local event_manager = EventManager:new()
+require("gui/core/event/handlers/keyboard_handler")
+require("gui/core/event/handlers/mouse_handler")
+require("gui/core/interaction_manager")
+
+KeyboardHandler:init()
+MouseHandler:init()
+InteractionManager:init()
 
 keyToNote = require("gui/core/note_map")
-event_manager:on_key_down(function(t)
+
+EventManager:on("key_down", function(t)
     if keyToNote[tostring(t)] then
         engine.send_note_on_event(keyToNote[tostring(t)])
     end
@@ -21,11 +29,13 @@ event_manager:on_key_down(function(t)
     end
 end)
 
-event_manager:on_key_up(function(t)
+EventManager:on("key_up", function(t)
     if keyToNote[tostring(t)] then
         engine.send_note_off_event(keyToNote[tostring(t)])
     end
 end)
+
+
 
 left = { 0, 0 }
 right = { 0, 0 }
@@ -51,6 +61,7 @@ end
 local topbar_layout = require("gui/layouts/topbar")
 local workspace_layout = require("gui/layouts/workspace")
 
+topbar_layout:register_permanent()
 
 
 
@@ -68,7 +79,11 @@ function update()
     workspace_layout:draw()
 
 
+    EventManager:on("app_quit", function()
+        print("bay")
+    end)
 
-    Animator:update(engine.get_delta_time())
-    event_manager:update()
+
+    --InteractionManager:draw_debug_hitboxes()
+    UpdateManager:update(engine.get_delta_time())
 end

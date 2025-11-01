@@ -18,8 +18,8 @@ function Img:new(prop, child)
     return obj
 end
 
-function Img:calculate_layout(parent_abs_x, parent_abs_y, pw, ph)
-    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, pw, ph)
+function Img:calculate_layout(parent_abs_x, parent_abs_y, pw, ph, bz, d)
+    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, pw, ph, bz, d)
 end
 
 function Img:draw()

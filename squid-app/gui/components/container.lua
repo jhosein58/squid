@@ -1,3 +1,4 @@
+require("gui/core/interaction_manager")
 local BaseComponent = require("gui/core/base_component")
 
 Container = BaseComponent:extend()
@@ -17,9 +18,22 @@ function Container:new(prop, child)
     return obj
 end
 
-function Container:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height)
-    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height)
+function Container:register_permanent()
+    InteractionManager:register_permanent(self)
+    if self.child and self.child.register_permanent then
+        self.child:register_permanent()
+    end
+end
 
+function Container:register_interactive()
+    InteractionManager:register_workspace(self)
+    if self.child and self.child.register_interactive then
+        self.child:register_interactive()
+    end
+end
+
+function Container:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height, base_z, depth)
+    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height, base_z, depth)
 
 
     if self.child then
@@ -28,7 +42,8 @@ function Container:calculate_layout(parent_abs_x, parent_abs_y, parent_width, pa
         local child_available_width = self.computed_width - (self.padding * 2)
         local child_available_height = self.computed_height - (self.padding * 2)
 
-        self.child:calculate_layout(child_available_x, child_available_y, child_available_width, child_available_height)
+        self.child:calculate_layout(child_available_x, child_available_y, child_available_width, child_available_height,
+            base_z, (depth or 0) + 1)
     end
 end
 

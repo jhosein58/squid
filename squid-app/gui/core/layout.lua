@@ -1,3 +1,4 @@
+require("gui/core/interaction_manager")
 local BaseComponent = require("gui/core/base_component")
 
 Layout = BaseComponent:extend()
@@ -14,12 +15,25 @@ function Layout:new(prop, children)
     return obj
 end
 
+function Layout:register_permanent()
+    for _, child in ipairs(self.children) do
+        child:register_permanent()
+    end
+end
+
+function Layout:register_interactive()
+    for _, child in ipairs(self.children) do
+        child:register_interactive()
+    end
+end
+
 function Layout:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height)
-    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height)
+    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height, self.base_z, 0)
 
     for _, child in ipairs(self.children) do
         if child.calculate_layout then
-            child:calculate_layout(self.computed_x, self.computed_y, self.computed_width, self.computed_height)
+            child:calculate_layout(self.computed_x, self.computed_y, self.computed_width, self.computed_height,
+                self.base_z, 0)
         end
     end
 end

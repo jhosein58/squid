@@ -15,8 +15,20 @@ function Row:new(prop)
     return obj
 end
 
-function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height)
-    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height)
+function Row:register_permanent()
+    for _, child in ipairs(self.children) do
+        child:register_permanent()
+    end
+end
+
+function Row:register_interactive()
+    for _, child in ipairs(self.children) do
+        child:register_interactive()
+    end
+end
+
+function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height, base_z, depth)
+    BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height, base_z, depth)
 
     if #self.children == 0 then return end
 
@@ -26,11 +38,12 @@ function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_h
         for i = #self.children, 1, -1 do
             local child = self.children[i]
 
-            child:calculate_layout(0, 0, self.computed_width, self.computed_height)
+            child:calculate_layout(0, 0, self.computed_width, self.computed_height, base_z, depth + 1)
 
             current_x = current_x - child.computed_width
 
-            child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height)
+            child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height, base_z,
+                depth + 1)
 
             if self.align_y_center then
                 child.computed_y = self.computed_y + (self.computed_height - child.computed_height) / 2
@@ -42,7 +55,8 @@ function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_h
         local current_x = self.computed_x
 
         for _, child in ipairs(self.children) do
-            child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height)
+            child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height, base_z,
+                depth + 1)
 
             if self.align_y_center then
                 child.computed_y = self.computed_y + (self.computed_height - child.computed_height) / 2

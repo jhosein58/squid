@@ -4,12 +4,11 @@ require("gui/core/size")
 require("gui/components/prelude")
 
 
+local f = {}
 
-return Layout:new({
+for i = 1, 4 do
+    f[#f + 1] = VFader:new({ x = 20 + (i - 1) * 40, y = 20, width = Size.absolute(20), height = Size.absolute(180), value = 0.75 })
+end
 
 
-
-}, {
-    Container:new(
-        { x = 0, y = 0, width = Size.absolute(100), height = Size.absolute(100), bg = { r = 45, g = 255, b = 45, a = 255 } })
-})
+return Layout:new({}, f)

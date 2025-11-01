@@ -1,4 +1,5 @@
 require("gui/core/size")
+require("gui/core/interaction_manager")
 
 BaseComponent = {}
 BaseComponent.__index = BaseComponent
@@ -20,6 +21,10 @@ function BaseComponent:new(prop)
     obj.computed_y      = 0
     obj.computed_width  = 0
     obj.computed_height = 0
+
+    obj.base_z          = prop.base_z or 0
+    obj.depth           = 0
+
     return obj
 end
 
@@ -30,7 +35,31 @@ function BaseComponent:extend()
     return cls
 end
 
-function BaseComponent:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height)
+function BaseComponent:register_permanent()
+    InteractionManager:register_permanent(self)
+end
+
+function BaseComponent:register_interactive()
+    InteractionManager:register_workspace(self)
+end
+
+function BaseComponent:get_hitbox()
+    return {
+        x = self.computed_x,
+        y = self.computed_y,
+        w = self.computed_width,
+        h = self.computed_height,
+    }
+end
+
+function BaseComponent:get_z_index()
+    return (self.base_z or 0) + (self.depth or 0)
+end
+
+function BaseComponent:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height, base_z, depth)
+    self.base_z = base_z
+    self.depth = depth
+
     self.computed_x = parent_abs_x + self.x
     self.computed_y = parent_abs_y + self.y
 

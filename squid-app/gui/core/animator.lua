@@ -1,3 +1,5 @@
+require("gui/core/update_manager")
+
 Animator = {
     active_tweens = {},
 }
@@ -21,6 +23,9 @@ Animator.easing = {
         end; t = t - 1; return c / 2 * (-pow(2, -10 * t) + 2) + b
     end,
 }
+
+
+UpdateManager:register(Animator)
 
 function Animator:new(props)
     local tween = {}
