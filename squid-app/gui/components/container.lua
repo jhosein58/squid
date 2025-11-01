@@ -20,6 +20,8 @@ end
 function Container:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_height)
     BaseComponent.calculate_layout(self, parent_abs_x, parent_abs_y, parent_width, parent_height)
 
+
+
     if self.child then
         local child_available_x = self.computed_x + self.padding
         local child_available_y = self.computed_y + self.padding

@@ -8,6 +8,12 @@ use mlua::{FromLua, Lua, Table};
 use squid_core::{Event, EventData};
 use squid_engine::StreamContext;
 
+pub enum ShapeStyle {
+    RoundedRect { radius: f32 },
+    Capsule,
+    Circle,
+}
+
 macro_rules! lua_fn {
     ($lua:expr, $table:expr, $name:expr, $closure:expr) => {{
         let f = $lua.create_function($closure).unwrap();
@@ -49,21 +55,20 @@ impl RuntimeApi {
     pub fn draw_simple_rect(x: f32, y: f32, w: f32, h: f32, color: macroquad::color::Color) {
         draw_rectangle(x, y, w, h, color);
     }
-    pub fn draw_rounded_rect(
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        radius: f32,
-        color: macroquad::color::Color,
-    ) {
-        let rt = render_target(w as u32, h as u32);
 
-        set_camera(&Camera2D {
-            target: vec2(w / 2.0, h / 2.0),
-            zoom: vec2(2.0 / w, -2.0 / h),
-            ..Default::default()
-        });
+    pub fn draw_rounded_shape(x: f32, y: f32, w: f32, h: f32, style: ShapeStyle, color: Color) {
+        let radius = match style {
+            ShapeStyle::RoundedRect { radius } => radius.min(w / 2.0).min(h / 2.0),
+            ShapeStyle::Capsule => w.min(h) / 2.0,
+            ShapeStyle::Circle => w.min(h) / 2.0,
+        };
+
+        if radius < 0.1 {
+            draw_rectangle(x, y, w, h, color);
+            return;
+        }
+
+        let rt = render_target(w as u32, h as u32);
         rt.texture.set_filter(FilterMode::Linear);
 
         set_camera(&Camera2D {
@@ -73,7 +78,7 @@ impl RuntimeApi {
             ..Default::default()
         });
 
-        clear_background(Color::new(0., 0., 0., 0.));
+        clear_background(Color::new(0.0, 0.0, 0.0, 0.0));
 
         draw_rectangle(radius, 0., w - 2.0 * radius, h, WHITE);
         draw_rectangle(0., radius, w, h - 2.0 * radius, WHITE);
@@ -83,7 +88,6 @@ impl RuntimeApi {
         draw_circle(w - radius, h - radius, radius, WHITE);
 
         set_default_camera();
-
         draw_texture_ex(
             &rt.texture,
             x,
@@ -108,7 +112,14 @@ impl RuntimeApi {
     ) {
         if radius > 0. {
             if border_width > 0. && border_color.a != 0. {
-                Self::draw_rounded_rect(x, y, w, h, radius, border_color);
+                Self::draw_rounded_shape(
+                    x,
+                    y,
+                    w,
+                    h,
+                    ShapeStyle::RoundedRect { radius },
+                    border_color,
+                );
 
                 let inner_x = x + border_width;
                 let inner_y = y + border_width;
@@ -117,9 +128,18 @@ impl RuntimeApi {
 
                 let inner_radius = (radius - border_width).max(0.0);
 
-                Self::draw_rounded_rect(inner_x, inner_y, inner_w, inner_h, inner_radius, color);
+                Self::draw_rounded_shape(
+                    inner_x,
+                    inner_y,
+                    inner_w,
+                    inner_h,
+                    ShapeStyle::RoundedRect {
+                        radius: inner_radius,
+                    },
+                    color,
+                );
             } else {
-                Self::draw_rounded_rect(x, y, w, h, radius, color);
+                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::RoundedRect { radius }, color);
             }
         } else {
             if border_width > 0. && border_color.a != 0. {
@@ -169,10 +189,19 @@ impl RuntimeApi {
             let y = Self::get_or(&prop, "y", 0.);
             let w = Self::get_or(&prop, "width", 0.);
             let h = Self::get_or(&prop, "height", 0.);
+
+            let shape = Self::get_or(&prop, "shape", String::from("r"));
+
             let radius = Self::get_or(&prop, "radius", 0.);
             let color = Self::parse_color_table(&color);
 
-            Self::draw_rounded_rect(x, y, w, h, radius, color);
+            if shape == "circle" {
+                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::Circle, color)
+            } else if shape == "capsule" {
+                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::Capsule, color)
+            } else {
+                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::RoundedRect { radius }, color)
+            }
 
             Ok(())
         });
@@ -272,6 +301,23 @@ impl RuntimeApi {
             draw_line(x1, y1, x2, y2, thickness, c);
 
             Ok(())
+        });
+
+        // --- measure_text ---
+        lua_fn!(lua, engine, "measure_text", |lua,
+                                              (text, prop): (
+            String,
+            mlua::Table
+        )| {
+            let size = prop.get::<f32>("size").unwrap_or(20.);
+
+            let dim = measure_text(&text, None, size as u16, 1.0);
+
+            let result = lua.create_table()?;
+            result.set("width", dim.width)?;
+            result.set("height", dim.height)?;
+            result.set("offset_y", dim.offset_y)?;
+            Ok(result)
         });
 
         // --- draw_text ---

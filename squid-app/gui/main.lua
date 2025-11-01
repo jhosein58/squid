@@ -3,26 +3,21 @@ require("gui/globals")
 require("gui/core/layout")
 require("gui/components/prelude")
 require("gui/core/size")
-
+require("gui/core/animator")
 
 local EventManager = require("gui/core/event_manager")
 local event_manager = EventManager:new()
-
-local oscilloscope = Oscilloscope:new({ x = 50, y = 50, width = 300, height = 100, thickness = 2, color = { r = 0, g = 190, b = 80, a = 255 }, border_radius = 8, })
-my_vectorscope = Vectorscope:new({
-    x = 50,
-    y = 50,
-    width = 400,
-    height = 400,
-    trail_duration = 0.1,
-    max_trail_points = 100,
-    lc = { r = 0, g = 255, b = 180, a = 255 }
-})
 
 keyToNote = require("gui/core/note_map")
 event_manager:on_key_down(function(t)
     if keyToNote[tostring(t)] then
         engine.send_note_on_event(keyToNote[tostring(t)])
+    end
+    if tostring(t) == "Right" then
+        WorkSpaces:switch(WorkSpaces.current + 1)
+    end
+    if tostring(t) == "Left" then
+        WorkSpaces:switch(WorkSpaces.current - 1)
     end
 end)
 
@@ -54,14 +49,26 @@ function waveform(data)
 end
 
 local topbar_layout = require("gui/layouts/topbar")
+local workspace_layout = require("gui/layouts/workspace")
+
+
+
 
 function update()
     local sw, sh = engine.get_screen_width(), engine.get_screen_height()
-    topbar_layout.width = sw
-    topbar_layout.height = 48
+
+
+
+    topbar_layout:calculate_layout(0, 0, sw, 48)
+    topbar_layout:update()
     topbar_layout:draw()
 
+    workspace_layout:calculate_layout(0, 48, sw, sh - 48)
+    topbar_layout:update()
+    workspace_layout:draw()
 
 
+
+    Animator:update(engine.get_delta_time())
     event_manager:update()
 end

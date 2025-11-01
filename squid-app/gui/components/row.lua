@@ -10,6 +10,7 @@ function Row:new(prop)
     obj.children = prop.children or {}
     obj.spacing = prop.spacing or 0
     obj.reverse_order = prop.reverse_order or false
+    obj.align_y_center = prop.align_y_center or false
 
     return obj
 end
@@ -31,6 +32,10 @@ function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_h
 
             child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height)
 
+            if self.align_y_center then
+                child.computed_y = self.computed_y + (self.computed_height - child.computed_height) / 2
+            end
+
             current_x = current_x - self.spacing
         end
     else
@@ -38,6 +43,10 @@ function Row:calculate_layout(parent_abs_x, parent_abs_y, parent_width, parent_h
 
         for _, child in ipairs(self.children) do
             child:calculate_layout(current_x, self.computed_y, self.computed_width, self.computed_height)
+
+            if self.align_y_center then
+                child.computed_y = self.computed_y + (self.computed_height - child.computed_height) / 2
+            end
 
             current_x = current_x + child.computed_width + self.spacing
         end

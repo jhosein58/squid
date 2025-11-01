@@ -57,4 +57,7 @@ if not engine then
 
     ---@type fun(prop)
     function engine.draw_texture(prop) end
+
+    ---@type fun(text, prop)
+    function engine.measure_text(text, prop) end
 end

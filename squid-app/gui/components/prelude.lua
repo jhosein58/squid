@@ -1,7 +1,9 @@
 require("gui/components/container")
-require("gui/components/text")
 require("gui/components/oscilloscope")
 require("gui/components/vectorscope")
 
 require("gui/components/row")
 require("gui/components/img")
+require("gui/components/wspoint")
+require("gui/core/workspace_manager")
+require("gui/components/text")
