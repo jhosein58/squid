@@ -1,4 +1,5 @@
 require("gui/core/size")
+local draw = require("gui/helpers/drawing")
 local BaseComponent = require("gui/core/base_component")
 
 Text = BaseComponent:extend()
@@ -7,51 +8,45 @@ function Text:new(prop)
     prop = prop or {}
     local obj = BaseComponent.new(self, prop)
 
-    obj.text = prop.text or ""
+
     obj.size = prop.size or 24
     obj.color = prop.color or { r = 255, g = 255, b = 255, a = 255 }
-    obj.bg = prop.bg or nil
-    obj.radius = prop.radius or 0
-    obj.padding = prop.padding or 0
-    obj.border_width = prop.border_width or 0
-    obj.border_color = prop.border_color or { r = 0, g = 0, b = 0, a = 255 }
 
-    local text_size = engine.measure_text(obj.text, { size = obj.size })
-
-    obj.width = Size.absolute(text_size.width)
-    obj.height = Size.absolute(text_size.height)
-
+    obj.font = prop.font or "gui/assets/fonts/Roboto/static/Roboto-Regular.ttf"
+    engine.load_font(obj.font)
+    obj:set_text(prop.text or "")
     return obj
 end
 
-function Text:set_text(text)
-    self.text = text
-    local text_size = engine.measure_text(self.text, { size = self.size })
+function Text:register_permanent()
+
+end
+
+function Text:register_interactive()
+
+end
+
+function Text:measure()
+    local text_size = engine.measure_text(self.text, self.size, self.font)
     self.width = Size.absolute(text_size.width)
     self.height = Size.absolute(text_size.height)
 end
 
+function Text:set_text(text)
+    self.text = text
+    self:measure()
+end
+
 function Text:calculate_layout(px, py, pw, ph)
+    self:measure()
     BaseComponent.calculate_layout(self, px, py, pw, ph)
 end
 
 function Text:draw()
-    local pad = self.padding;
-    if self.bg then
-        engine.draw_bordered_rounded_rect({
-            x = self.computed_x,
-            y = self.computed_y,
-            width = self.computed_width + (pad * 2),
-            height = self.computed_height + (pad * 2) - self.computed_height / 2,
-            radius = self.radius,
-            border_width = self.border_width
-        }, self.bg, self.border_color);
-    end
-    engine.draw_text(self.text, {
-        x = self.computed_x + pad,
-        y = self.computed_y + (self.computed_height / 2) + pad,
-        size = self.size
-    }, self.color)
+    engine.draw_text(self.text or "", self.font, self.computed_x or 0,
+        (self.computed_y or 0) + (self.computed_height or 0),
+        self
+        .size or 18, self.color.r or 255, self.color.g or 255, self.color.b or 255, self.color.a or 255)
 end
 
 return Text

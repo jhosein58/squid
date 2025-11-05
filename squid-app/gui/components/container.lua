@@ -1,4 +1,5 @@
 require("gui/core/interaction_manager")
+local draw = require("gui/helpers/drawing")
 local BaseComponent = require("gui/core/base_component")
 
 Container = BaseComponent:extend()
@@ -19,14 +20,12 @@ function Container:new(prop, child)
 end
 
 function Container:register_permanent()
-    InteractionManager:register_permanent(self)
     if self.child and self.child.register_permanent then
         self.child:register_permanent()
     end
 end
 
 function Container:register_interactive()
-    InteractionManager:register_workspace(self)
     if self.child and self.child.register_interactive then
         self.child:register_interactive()
     end
@@ -48,14 +47,8 @@ function Container:calculate_layout(parent_abs_x, parent_abs_y, parent_width, pa
 end
 
 function Container:draw()
-    engine.draw_bordered_rounded_rect({
-        x = self.computed_x,
-        y = self.computed_y,
-        width = self.computed_width,
-        height = self.computed_height,
-        radius = self.radius,
-        border_width = self.border_width,
-    }, self.bg, self.border_color)
+    draw.bordered_rounded_rect(self.computed_x, self.computed_y, self.computed_width, self.computed_height, self.radius,
+        self.border_width, self.bg, self.border_color)
 
     if self.child then
         self.child:draw()

@@ -1,8 +1,10 @@
 use std::{
+    cmp::min,
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
+use futures::executor::block_on;
 use macroquad::{prelude::*, texture};
 use mlua::{FromLua, Lua, Table};
 use squid_core::{Event, EventData};
@@ -30,12 +32,14 @@ macro_rules! lua_fn_async {
 
 pub struct RuntimeApi {
     texture_cache: Arc<Mutex<HashMap<String, Texture2D>>>,
+    font_cache: Arc<Mutex<HashMap<String, Font>>>,
 }
 
 impl RuntimeApi {
     pub fn new() -> Self {
         Self {
             texture_cache: Arc::new(Mutex::new(HashMap::new())),
+            font_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
     pub fn get_or<T>(tbl: &mlua::Table, val: &str, default: T) -> T
@@ -44,11 +48,11 @@ impl RuntimeApi {
     {
         tbl.get::<T>(val).unwrap_or(default)
     }
-    pub fn parse_color_table(color_table: &mlua::Table) -> macroquad::color::Color {
+    pub fn parse_color_table(color_table: &mlua::Table, default_a: f32) -> macroquad::color::Color {
         let r = Self::get_or(color_table, "r", 0.0) / 255.0;
         let g = Self::get_or(color_table, "g", 0.0) / 255.0;
         let b = Self::get_or(color_table, "b", 0.0) / 255.0;
-        let a = Self::get_or(color_table, "a", 255.0) / 255.0;
+        let a = Self::get_or(color_table, "a", default_a) / 255.0;
         macroquad::color::Color::new(r, g, b, a)
     }
 
@@ -56,103 +60,228 @@ impl RuntimeApi {
         draw_rectangle(x, y, w, h, color);
     }
 
-    pub fn draw_rounded_shape(x: f32, y: f32, w: f32, h: f32, style: ShapeStyle, color: Color) {
-        let radius = match style {
-            ShapeStyle::RoundedRect { radius } => radius.min(w / 2.0).min(h / 2.0),
-            ShapeStyle::Capsule => w.min(h) / 2.0,
-            ShapeStyle::Circle => w.min(h) / 2.0,
-        };
+    fn draw_internal_fast_rounded_rect(x: f32, y: f32, w: f32, h: f32, radius: f32, color: Color) {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
 
-        if radius < 0.1 {
+        let r = radius.min(w * 0.5).min(h * 0.5);
+        if r < 0.1 {
             draw_rectangle(x, y, w, h, color);
             return;
         }
 
-        let rt = render_target(w as u32, h as u32);
-        rt.texture.set_filter(FilterMode::Linear);
+        const CORNER_SEGMENTS: usize = 12;
+        const PI: f32 = std::f32::consts::PI;
+        const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
 
-        set_camera(&Camera2D {
-            target: vec2(w / 2.0, h / 2.0),
-            zoom: vec2(2.0 / w, -2.0 / h),
-            render_target: Some(rt.clone()),
-            ..Default::default()
+        let mut vertices: Vec<Vertex> = Vec::with_capacity(4 * (CORNER_SEGMENTS + 1) + 1);
+        let mut indices: Vec<u16> = Vec::with_capacity(4 * CORNER_SEGMENTS * 3);
+
+        vertices.push(Vertex {
+            position: vec3(x + w / 2.0, y + h / 2.0, 0.0),
+            uv: vec2(0.0, 0.0),
+            color: [color.r as u8, color.g as u8, color.b as u8, color.a as u8],
+            normal: vec4(0.0, 0.0, 1.0, 0.0),
         });
+        let center_idx = 0u16;
 
-        clear_background(Color::new(0.0, 0.0, 0.0, 0.0));
+        let mut add_corner = |cx: f32, cy: f32, start_angle: f32| {
+            for i in 0..=CORNER_SEGMENTS {
+                let t = i as f32 / CORNER_SEGMENTS as f32;
+                let ang = start_angle + t * HALF_PI;
+                vertices.push(Vertex {
+                    position: vec3(cx + ang.cos() * r, cy + ang.sin() * r, 0.0),
+                    uv: vec2(0.0, 0.0),
+                    color: [color.r as u8, color.g as u8, color.b as u8, color.a as u8],
+                    normal: vec4(0.0, 0.0, 1.0, 0.0),
+                });
+            }
+        };
 
-        draw_rectangle(radius, 0., w - 2.0 * radius, h, WHITE);
-        draw_rectangle(0., radius, w, h - 2.0 * radius, WHITE);
-        draw_circle(radius, radius, radius, WHITE);
-        draw_circle(w - radius, radius, radius, WHITE);
-        draw_circle(radius, h - radius, radius, WHITE);
-        draw_circle(w - radius, h - radius, radius, WHITE);
+        add_corner(x + r, y + r, PI);
+        add_corner(x + w - r, y + r, -HALF_PI);
+        add_corner(x + w - r, y + h - r, 0.0);
+        add_corner(x + r, y + h - r, HALF_PI);
 
-        set_default_camera();
-        draw_texture_ex(
-            &rt.texture,
-            x,
-            y,
-            color,
-            DrawTextureParams {
-                dest_size: Some(vec2(w, h)),
-                ..Default::default()
-            },
-        );
+        let perim_count = vertices.len() as u16 - 1;
+        for i in 1..perim_count {
+            indices.extend_from_slice(&[center_idx, i, i + 1]);
+        }
+        indices.extend_from_slice(&[center_idx, perim_count, 1]);
+
+        draw_mesh(&Mesh {
+            vertices,
+            indices,
+            texture: None,
+        });
     }
 
-    pub fn draw_bordered_rounded_rect(
+    pub fn draw_rect_advanced(
         x: f32,
         y: f32,
         w: f32,
         h: f32,
         radius: f32,
         border_width: f32,
-        border_color: Color,
         color: Color,
+        border_color: Color,
     ) {
-        if radius > 0. {
-            if border_width > 0. && border_color.a != 0. {
-                Self::draw_rounded_shape(
-                    x,
-                    y,
-                    w,
-                    h,
-                    ShapeStyle::RoundedRect { radius },
-                    border_color,
-                );
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
 
-                let inner_x = x + border_width;
-                let inner_y = y + border_width;
+        let has_border = border_width > 0.0 && border_color.a > 0.0;
+        let has_radius = radius >= 0.1;
+
+        match (has_border, has_radius) {
+            (false, false) => {
+                if color.a > 0.0 {
+                    let c = Color::new(
+                        color.r / 255.,
+                        color.g / 255.,
+                        color.b / 255.,
+                        color.a / 255.,
+                    );
+                    Self::draw_simple_rect(x, y, w, h, c);
+                }
+            }
+
+            (false, true) => {
+                if color.a > 0.0 {
+                    Self::draw_internal_fast_rounded_rect(x, y, w, h, radius, color);
+                }
+            }
+
+            (true, false) => {
+                let c = Color::new(
+                    color.r / 255.,
+                    color.g / 255.,
+                    color.b / 255.,
+                    color.a / 255.,
+                );
+                let bc = Color::new(
+                    border_color.r / 255.,
+                    border_color.g / 255.,
+                    border_color.b / 255.,
+                    border_color.a / 255.,
+                );
+                draw_rectangle(x, y, w, h, bc);
+
                 let inner_w = w - border_width * 2.0;
                 let inner_h = h - border_width * 2.0;
+                if color.a > 0.0 && inner_w > 0.0 && inner_h > 0.0 {
+                    draw_rectangle(x + border_width, y + border_width, inner_w, inner_h, c);
+                }
+            }
 
+            (true, true) => {
+                let inner_x = x + border_width;
+                let inner_y = y + border_width;
+                let inner_w = (w - border_width * 2.0).max(0.0);
+                let inner_h = (h - border_width * 2.0).max(0.0);
                 let inner_radius = (radius - border_width).max(0.0);
 
-                Self::draw_rounded_shape(
-                    inner_x,
-                    inner_y,
-                    inner_w,
-                    inner_h,
-                    ShapeStyle::RoundedRect {
-                        radius: inner_radius,
-                    },
-                    color,
-                );
-            } else {
-                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::RoundedRect { radius }, color);
-            }
-        } else {
-            if border_width > 0. && border_color.a != 0. {
-                Self::draw_simple_rect(x, y, w, h, border_color);
+                if color.a > 0.0 && inner_w > 0.0 && inner_h > 0.0 {
+                    Self::draw_internal_fast_rounded_rect(
+                        inner_x,
+                        inner_y,
+                        inner_w,
+                        inner_h,
+                        inner_radius,
+                        color,
+                    );
+                }
 
-                let inner_x = x + border_width;
-                let inner_y = y + border_width;
-                let inner_w = w - border_width * 2.0;
-                let inner_h = h - border_width * 2.0;
+                let r_outer = radius.min(w * 0.5).min(h * 0.5);
+                let r_inner = (r_outer - border_width).max(0.0);
 
-                Self::draw_simple_rect(inner_x, inner_y, inner_w, inner_h, color);
-            } else {
-                Self::draw_simple_rect(x, y, w, h, color);
+                const CORNER_SEGMENTS: usize = 12;
+                const PI: f32 = std::f32::consts::PI;
+                const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
+
+                let mut vertices: Vec<Vertex> = Vec::with_capacity((CORNER_SEGMENTS + 1) * 4 * 2);
+                let mut indices: Vec<u16> =
+                    Vec::with_capacity(CORNER_SEGMENTS * 4 * 2 * 3 + 4 * 2 * 3);
+
+                let border_color_u8 = [
+                    border_color.r as u8,
+                    border_color.g as u8,
+                    border_color.b as u8,
+                    border_color.a as u8,
+                ];
+                let normal_v4 = vec4(0.0, 0.0, 1.0, 0.0);
+
+                let corners_outer = [
+                    (x + r_outer, y + r_outer, PI),
+                    (x + w - r_outer, y + r_outer, -HALF_PI),
+                    (x + w - r_outer, y + h - r_outer, 0.0),
+                    (x + r_outer, y + h - r_outer, HALF_PI),
+                ];
+
+                let corners_inner = [
+                    (inner_x + r_inner, inner_y + r_inner, PI),
+                    (inner_x + inner_w - r_inner, inner_y + r_inner, -HALF_PI),
+                    (
+                        inner_x + inner_w - r_inner,
+                        inner_y + inner_h - r_inner,
+                        0.0,
+                    ),
+                    (inner_x + r_inner, inner_y + inner_h - r_inner, HALF_PI),
+                ];
+
+                for i in 0..4 {
+                    let (cx_out, cy_out, start_angle) = corners_outer[i];
+                    let (cx_in, cy_in, _) = corners_inner[i];
+                    for j in 0..=CORNER_SEGMENTS {
+                        let t = j as f32 / CORNER_SEGMENTS as f32;
+                        let ang = start_angle + t * HALF_PI;
+                        let cos_a = ang.cos();
+                        let sin_a = ang.sin();
+                        vertices.push(Vertex {
+                            position: vec3(cx_out + cos_a * r_outer, cy_out + sin_a * r_outer, 0.0),
+                            uv: vec2(0.0, 0.0),
+                            color: border_color_u8,
+                            normal: normal_v4,
+                        });
+                        vertices.push(Vertex {
+                            position: vec3(cx_in + cos_a * r_inner, cy_in + sin_a * r_inner, 0.0),
+                            uv: vec2(0.0, 0.0),
+                            color: border_color_u8,
+                            normal: normal_v4,
+                        });
+                    }
+                }
+
+                let verts_per_corner = (CORNER_SEGMENTS + 1) * 2;
+                for c in 0..4 {
+                    let base_idx = (c * verts_per_corner) as u16;
+                    for i in 0..(CORNER_SEGMENTS as u16) {
+                        let current = base_idx + i * 2;
+                        indices.extend_from_slice(&[current, current + 1, current + 2]);
+                        indices.extend_from_slice(&[current + 1, current + 3, current + 2]);
+                    }
+                    let next_c = (c + 1) % 4;
+                    let current_end_outer = base_idx + (verts_per_corner as u16) - 2;
+                    let current_end_inner = base_idx + (verts_per_corner as u16) - 1;
+                    let next_start_outer = (next_c * verts_per_corner) as u16;
+                    let next_start_inner = next_start_outer + 1;
+                    indices.extend_from_slice(&[
+                        current_end_outer,
+                        current_end_inner,
+                        next_start_outer,
+                    ]);
+                    indices.extend_from_slice(&[
+                        current_end_inner,
+                        next_start_inner,
+                        next_start_outer,
+                    ]);
+                }
+                draw_mesh(&Mesh {
+                    vertices,
+                    indices,
+                    texture: None,
+                });
             }
         }
     }
@@ -162,71 +291,48 @@ impl RuntimeApi {
         lua.globals().set("engine", engine.clone()).unwrap();
 
         // --- draw_rect ---
-        lua_fn!(lua, engine, "draw_rect", |_,
-                                           (prop, color): (
-            mlua::Table,
-            mlua::Table
-        )| {
-            let x = Self::get_or(&prop, "x", 0.);
-            let y = Self::get_or(&prop, "y", 0.);
-            let w = Self::get_or(&prop, "width", 0.);
-            let h = Self::get_or(&prop, "height", 0.);
-
-            let c = Self::parse_color_table(&color);
-
-            Self::draw_simple_rect(x, y, w, h, c);
-
-            Ok(())
-        });
-
-        // --- draw_rounded_rect ---
-        lua_fn!(lua, engine, "draw_rounded_rect", |_,
-                                                   (prop, color): (
-            mlua::Table,
-            mlua::Table
-        )| {
-            let x = Self::get_or(&prop, "x", 0.);
-            let y = Self::get_or(&prop, "y", 0.);
-            let w = Self::get_or(&prop, "width", 0.);
-            let h = Self::get_or(&prop, "height", 0.);
-
-            let shape = Self::get_or(&prop, "shape", String::from("r"));
-
-            let radius = Self::get_or(&prop, "radius", 0.);
-            let color = Self::parse_color_table(&color);
-
-            if shape == "circle" {
-                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::Circle, color)
-            } else if shape == "capsule" {
-                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::Capsule, color)
-            } else {
-                Self::draw_rounded_shape(x, y, w, h, ShapeStyle::RoundedRect { radius }, color)
-            }
-
-            Ok(())
-        });
-
-        // --- draw_bordered_rounded_rect ---
-        lua_fn!(lua, engine, "draw_bordered_rounded_rect", |_,
-                                                            (
-            prop,
-            color,
-            border_color,
+        lua_fn!(lua, engine, "draw_rect", move |_,
+                                                (
+            x,
+            y,
+            w,
+            h,
+            r,
+            bw,
+            c_r,
+            c_g,
+            c_b,
+            c_a,
+            bc_r,
+            bc_g,
+            bc_b,
+            bc_a,
+            shape,
         ): (
-            mlua::Table,
-            mlua::Table,
-            mlua::Table
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            String
         )| {
-            let x = Self::get_or(&prop, "x", 0.);
-            let y = Self::get_or(&prop, "y", 0.);
-            let w = Self::get_or(&prop, "width", 0.);
-            let h = Self::get_or(&prop, "height", 0.);
-            let border_width = Self::get_or(&prop, "border_width", 0.);
-            let radius = Self::get_or(&prop, "radius", 0.);
-            let color = Self::parse_color_table(&color);
-            let border_color = Self::parse_color_table(&border_color);
+            let color = Color::new(c_r, c_g, c_b, c_a);
+            let border_color = Color::new(bc_r, bc_g, bc_b, bc_a);
 
-            Self::draw_bordered_rounded_rect(x, y, w, h, radius, border_width, border_color, color);
+            if shape == "circle" || shape == "capsule" || shape == "c" {
+                Self::draw_rect_advanced(x, y, w, h, (w / 2.).min(h / 2.), bw, color, border_color)
+            } else {
+                Self::draw_rect_advanced(x, y, w, h, r, bw, color, border_color)
+            }
 
             Ok(())
         });
@@ -303,15 +409,30 @@ impl RuntimeApi {
             Ok(())
         });
 
-        // --- measure_text ---
-        lua_fn!(lua, engine, "measure_text", |lua,
-                                              (text, prop): (
-            String,
-            mlua::Table
-        )| {
-            let size = prop.get::<f32>("size").unwrap_or(20.);
+        let font_cache = self.font_cache.clone();
+        // --- load_font ---
+        lua_fn!(lua, engine, "load_font", move |_, path: String| {
+            let mut font_cache = font_cache.lock().unwrap();
 
-            let dim = measure_text(&text, None, size as u16, 1.0);
+            if let None = font_cache.get(&path) {
+                let font = block_on(async { load_ttf_font(&path).await.unwrap() });
+                font_cache.insert(path, font);
+            }
+            Ok(())
+        });
+
+        let font_cache = self.font_cache.clone();
+        // --- measure_text ---
+        lua_fn!(lua, engine, "measure_text", move |lua,
+                                                   (text, size, font): (
+            String,
+            f32,
+            String
+        )| {
+            let font_cache = font_cache.lock().unwrap();
+            let font = font_cache.get(&font);
+
+            let dim = measure_text(&text, font, size as u16, 1.0);
 
             let result = lua.create_table()?;
             result.set("width", dim.width)?;
@@ -320,24 +441,44 @@ impl RuntimeApi {
             Ok(result)
         });
 
+        let font_cache = self.font_cache.clone();
         // --- draw_text ---
-        lua_fn!(lua, engine, "draw_text", |_,
-                                           (text, prop, color): (
+        lua_fn!(lua, engine, "draw_text", move |_,
+                                                (
+            text,
+            font,
+            x,
+            y,
+            s,
+            c_r,
+            c_g,
+            c_b,
+            c_a,
+        ): (
             String,
-            mlua::Table,
-            mlua::Table
+            String,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
+            f32,
         )| {
-            let x = prop.get::<f32>("x").unwrap_or(0.);
-            let y = prop.get::<f32>("y").unwrap_or(0.);
-            let size = prop.get::<f32>("size").unwrap_or(20.);
+            let c = Color::new(c_r / 255.0, c_g / 255.0, c_b / 255.0, c_a / 255.0);
 
-            let red = color.get::<f32>("r").unwrap_or(255.) / 255.0;
-            let green = color.get::<f32>("g").unwrap_or(255.) / 255.0;
-            let blue = color.get::<f32>("b").unwrap_or(255.) / 255.0;
-            let alpha = color.get::<f32>("a").unwrap_or(255.) / 255.0;
-
-            let c = Color::new(red, green, blue, alpha);
-            draw_text(&text, x, y, size, c);
+            let font_cache = font_cache.lock().unwrap();
+            draw_text_ex(
+                &text,
+                x,
+                y,
+                TextParams {
+                    font: font_cache.get(&font),
+                    font_size: s as u16,
+                    color: c,
+                    ..Default::default()
+                },
+            );
 
             Ok(())
         });

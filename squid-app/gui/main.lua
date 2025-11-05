@@ -3,7 +3,7 @@ require("gui/globals")
 require("gui/core/layout")
 require("gui/components/prelude")
 require("gui/core/size")
-require("gui/core/animator")
+require("gui/core/animation/animator")
 require("gui/core/update_manager")
 require("gui/core/event/event_manager")
 
@@ -56,6 +56,14 @@ function waveform(data)
     end
 
     TopBarScope.data = mono
+    local sum_sq = 0
+    for i = 1, #mono do
+        local s = mono[i]
+        sum_sq = sum_sq + s * s
+    end
+
+    local rms = math.sqrt(sum_sq / #mono)
+    Meter:set_level(rms)
 end
 
 local topbar_layout = require("gui/layouts/topbar")
@@ -63,25 +71,21 @@ local workspace_layout = require("gui/layouts/workspace")
 
 topbar_layout:register_permanent()
 
+local draw = require("gui/helpers/drawing")
+
+
 
 
 function update()
     local sw, sh = engine.get_screen_width(), engine.get_screen_height()
 
 
-
     topbar_layout:calculate_layout(0, 0, sw, 48)
-    topbar_layout:update()
+
     topbar_layout:draw()
 
     workspace_layout:calculate_layout(0, 48, sw, sh - 48)
-    topbar_layout:update()
     workspace_layout:draw()
-
-
-    EventManager:on("app_quit", function()
-        print("bay")
-    end)
 
 
     --InteractionManager:draw_debug_hitboxes()

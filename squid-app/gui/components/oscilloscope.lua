@@ -1,5 +1,5 @@
 require("gui/globals")
-
+local draw = require("gui/helpers/drawing")
 local BaseComponent = require("gui/core/base_component");
 
 Oscilloscope = BaseComponent:extend()
@@ -23,19 +23,10 @@ function Oscilloscope:calculate_layout(parent_abs_x, parent_abs_y, parent_width,
 end
 
 function Oscilloscope:draw()
-    engine.draw_bordered_rounded_rect(
-        {
-            x = self.computed_x,
-            y = self.computed_y,
-            width = self.computed_width,
-            height = self.computed_height,
-            radius = self.border_radius,
-            border_width = self.border_width,
-        },
-        self.bg,
+    draw.bordered_rounded_rect(self.computed_x, self.computed_y, self.computed_width, self.computed_height,
+        self.border_radius, self.border_width, self.bg,
+        self.border_color);
 
-        self.border_color
-    )
 
 
     engine.draw_waveform(

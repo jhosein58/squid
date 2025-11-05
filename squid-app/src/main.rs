@@ -16,7 +16,17 @@ use squid_engine::{
     unison_osc::UnisonOsc,
 };
 
-#[macroquad::main("Lua + Macroquad Demo")]
+fn window_conf() -> Conf {
+    Conf {
+        window_title: "Squid".to_string(),
+        window_resizable: true,
+        fullscreen: false,
+
+        ..Default::default()
+    }
+}
+
+#[macroquad::main(window_conf)]
 async fn main() -> Result<()> {
     let ctx = Arc::new(StreamContext::new());
     let shared_ctx = ctx.clone();

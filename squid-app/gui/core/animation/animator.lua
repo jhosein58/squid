@@ -24,30 +24,47 @@ Animator.easing = {
     end,
 }
 
-
 UpdateManager:register(Animator)
 
 function Animator:new(props)
     local tween = {}
 
     tween.target = props.target
-    tween.property = props.property
-    tween.to_value = props.to
     tween.duration = props.duration or 1
     tween.delay = props.delay or 0
+    tween.easing_func = self.easing[props.ease or "linear"] or self.easing.linear
+    tween.elapsed = 0
+    tween.onComplete = props.onComplete
 
-    tween.start_value = props.from or tween.target[tween.property]
+    tween.properties = {}
+
+    if type(props.to) ~= "table" then
+        print("Animator Error: 'to' property must be a table.")
+        return nil
+    end
 
     if tween.duration == 0 and tween.delay == 0 then
-        tween.target[tween.property] = tween.to_value
+        for prop_name, to_value in pairs(props.to) do
+            tween.target[prop_name] = to_value
+        end
         if props.onComplete then props.onComplete() end
         return
     end
 
-    tween.change = tween.to_value - tween.start_value
-    tween.easing_func = self.easing[props.ease or "linear"] or self.easing.linear
-    tween.elapsed = 0
-    tween.onComplete = props.onComplete
+    for prop_name, to_value in pairs(props.to) do
+        local start_value
+        if props.from and props.from[prop_name] ~= nil then
+            start_value = props.from[prop_name]
+        else
+            start_value = tween.target[prop_name]
+        end
+
+        tween.properties[prop_name] = {
+            start = start_value,
+            to = to_value,
+            change = to_value - start_value,
+        }
+    end
 
     table.insert(self.active_tweens, tween)
     return tween
@@ -63,14 +80,20 @@ function Animator:update(dt)
             tween.elapsed = tween.elapsed + dt
 
             if tween.elapsed >= tween.duration then
-                tween.target[tween.property] = tween.to_value
+                for prop_name, prop_data in pairs(tween.properties) do
+                    tween.target[prop_name] = prop_data.to
+                end
+
                 if tween.onComplete then
                     tween.onComplete()
                 end
                 table.remove(self.active_tweens, i)
             else
-                local current_val = tween.easing_func(tween.elapsed, tween.start_value, tween.change, tween.duration)
-                tween.target[tween.property] = current_val
+                for prop_name, prop_data in pairs(tween.properties) do
+                    local current_val = tween.easing_func(tween.elapsed, prop_data.start, prop_data.change,
+                        tween.duration)
+                    tween.target[prop_name] = current_val
+                end
             end
         end
     end

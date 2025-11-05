@@ -1,4 +1,5 @@
 require("gui/core/interaction_manager")
+local draw = require("gui/helpers/drawing")
 local BaseComponent = require("gui/core/base_component")
 
 Layout = BaseComponent:extend()
@@ -40,15 +41,20 @@ end
 
 function Layout:draw()
     if self.bg then
-        engine.draw_rect(
-            { x = self.computed_x, y = self.computed_y, width = self.computed_width, height = self.computed_height },
-            self
-            .bg)
+        draw.rect(
+            self.computed_x, self.computed_y, self.computed_width, self.computed_height,
+            self.bg)
     end
 
     for _, child in ipairs(self.children) do
         if child.draw then
             child:draw()
+        end
+    end
+
+    for _, child in ipairs(self.children) do
+        if child.draw_overlay then
+            child:draw_overlay()
         end
     end
 end
