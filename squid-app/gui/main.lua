@@ -74,9 +74,54 @@ topbar_layout:register_permanent()
 local draw = require("gui/helpers/drawing")
 
 
+--------------------------------------
 
+
+package.path    = package.path .. ";gui/lib/lua_midi/?.lua;gui/lib/lua_midi/?/init.lua"
+local LuaMidi   = require("LuaMidi")
+local Track     = LuaMidi.Track
+local NoteEvent = LuaMidi.NoteEvent
+local Writer    = LuaMidi.Writer
+local function play_note_on(note, velocity)
+    engine.send_note_on_event(note)
+end
+
+local function play_note_off(note)
+    engine.send_note_off_event(note)
+end
+
+-- انتخاب BPM دلخواه
+local bpm = 128
+local seconds_per_beat = 60 / bpm
+
+local events = engine.read_midi_file("test.mid")
+
+for i, ev in ipairs(events) do
+    ev.time_seconds = ev.time_beats * seconds_per_beat
+end
+
+table.sort(events, function(a, b) return a.time_seconds < b.time_seconds end)
+
+local current_time = 0.0
+local event_index  = 1
+
+function update_midi(dt)
+    current_time = current_time + dt
+    while event_index <= #events and events[event_index].time_seconds <= current_time do
+        local ev = events[event_index]
+        if ev.kind == "on" then
+            engine.send_note_on_event(ev.note, ev.velocity or 100)
+        else
+            engine.send_note_off_event(ev.note)
+        end
+        event_index = event_index + 1
+    end
+end
+
+------------------------------------
 
 function update()
+    update_midi(engine.get_delta_time())
     local sw, sh = engine.get_screen_width(), engine.get_screen_height()
 
 

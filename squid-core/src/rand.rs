@@ -1,3 +1,4 @@
+#[derive(Clone, Copy)]
 pub struct Rand {
     state: u32,
 }

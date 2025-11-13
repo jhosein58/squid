@@ -1,6 +1,7 @@
 pub mod composite_osc;
 pub mod func_osc;
 pub mod primetives;
+pub mod sin_simd_osc;
 
 pub trait Oscillator: Send + Sync {
     fn set_frequency(&mut self, frequency: f32);

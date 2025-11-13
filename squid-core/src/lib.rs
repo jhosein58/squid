@@ -1,5 +1,9 @@
 #![no_std]
+#![feature(portable_simd)]
+#![feature(core_float_math)]
+#![feature(generic_const_exprs)]
 
+pub mod audio_nodes;
 pub mod buffer;
 pub mod config;
 pub mod dsp;
@@ -14,6 +18,7 @@ pub mod rand;
 pub mod telemetry;
 pub mod timing;
 
+pub use audio_nodes::*;
 pub use buffer::*;
 pub use config::*;
 pub use dsp::*;

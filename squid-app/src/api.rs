@@ -1,3 +1,5 @@
+use midly::MetaMessage;
+use mlua::prelude::*;
 use std::{
     cmp::min,
     collections::HashMap,
@@ -708,6 +710,70 @@ impl RuntimeApi {
             }
 
             Ok(())
+        });
+
+        use midly::{Smf, TrackEventKind};
+        // --- read_midi_file ---
+
+        lua_fn!(lua, engine, "read_midi_file", move |lua, file: String| {
+            let bytes = std::fs::read(&file).map_err(|e| LuaError::external(e))?;
+            let smf = Smf::parse(&bytes).map_err(|e| LuaError::external(e))?;
+
+            let ppq = match smf.header.timing {
+                midly::Timing::Metrical(t) => t.as_int() as f32,
+                _ => 480.0,
+            };
+
+            // همه رویدادها در یک لیست
+            let mut all_events = Vec::new();
+
+            for track in &smf.tracks {
+                let mut abs_tick: u32 = 0;
+                for event in track {
+                    abs_tick += event.delta.as_int();
+                    match event.kind {
+                        TrackEventKind::Midi {
+                            channel: _,
+                            message,
+                        } => match message {
+                            midly::MidiMessage::NoteOn { key, vel } => {
+                                let kind = if vel > 0 { "on" } else { "off" };
+                                all_events.push((
+                                    abs_tick,
+                                    kind.to_string(),
+                                    key.as_int(),
+                                    vel.as_int(),
+                                ));
+                            }
+                            midly::MidiMessage::NoteOff { key, .. } => {
+                                all_events.push((abs_tick, "off".to_string(), key.as_int(), 0));
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                }
+            }
+
+            // مرتب‌سازی بر اساس زمان
+            all_events.sort_by_key(|e| e.0);
+
+            // تبدیل به جدول Lua
+            let res = lua.create_table()?;
+            let mut idx = 1;
+            for (tick, kind, note, vel) in all_events {
+                let ev = lua.create_table()?;
+                ev.set("time_beats", tick as f32 / ppq)?;
+                ev.set("kind", kind.clone())?;
+                ev.set("note", note)?;
+                if kind == "on" {
+                    ev.set("velocity", vel)?;
+                }
+                res.set(idx, ev)?;
+                idx += 1;
+            }
+
+            Ok(res)
         });
     }
 }

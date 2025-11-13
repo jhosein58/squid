@@ -9,12 +9,19 @@ use macroquad::prelude::*;
 use mlua::{Function, Lua, Result};
 use squid_app::api::RuntimeApi;
 use squid_core::{
-    Event, EventData, FixedSpscQueue, Note, Oscillator, PitchClass, Plugin, primetives::SawOsc,
+    Event, EventData, FixedSpscQueue, Note, PitchClass, Plugin,
+    oscillators::{saw_osc::SawOsc, sin_osc::SinOsc},
+    process_context::ProcessContext,
+    synths::poly_synth::PolySynth,
+    vecblock::{Add, Div, Vec8},
 };
 use squid_engine::{
-    LivePlaybackk, OscilloscopeTrigger, StreamContext, TriggerEdge, sin_synth::SinSynth,
-    unison_osc::UnisonOsc,
+    LivePlayback, OscilloscopeTrigger, StreamContext, TriggerEdge,
+    oscillators::unison_osc::UnisonOsc, sin_synth::SinSynth,
 };
+
+use squid_core::AudioNode;
+use squid_core::oscillators::Oscillator;
 
 fn window_conf() -> Conf {
     Conf {
@@ -31,14 +38,13 @@ async fn main() -> Result<()> {
     let ctx = Arc::new(StreamContext::new());
     let shared_ctx = ctx.clone();
 
-    let last_waveform = Arc::new(Mutex::new(Vec::new()));
+    let last_waveform: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
     let last_waveform_c = last_waveform.clone();
 
     thread::spawn(move || {
-        let mut pb = LivePlaybackk::new();
-        let shared = Arc::new(FixedSpscQueue::<f32, 512>::new());
+        let shared = Arc::new(FixedSpscQueue::<f32, 128>::new());
 
-        let mut trigger_system = OscilloscopeTrigger::<512>::new(
+        let mut trigger_system = OscilloscopeTrigger::<128>::new(
             shared.clone(),
             0.0,
             TriggerEdge::Rising,
@@ -47,25 +53,25 @@ async fn main() -> Result<()> {
             44100.,
         );
 
-        let mut synth = SinSynth(44100);
-        // let mut synth = UnisonOsc::new(|s| Box::new(SawOsc(s)), 255);
-        // synth.apply_distribution_factor(0.05);
+        let mut osc = SinOsc::new();
 
-        // synth.set_frequency(Note::new(PitchClass::A, 4).to_frequency().into());
+        let mut synth = PolySynth::new(osc);
 
-        pb.build_stream(Box::new(move |data| {
+        let pd = LivePlayback::new(Box::new(move |ctx, out| {
             let mut e = Vec::new();
             while let Some(v) = shared_ctx.events.pop() {
                 e.push(v);
             }
-            synth.process(&[], &mut [data], &e);
+            let ctx = &ProcessContext {
+                inputs: ctx.inputs,
+                events: &e,
+                sample_rate: ctx.sample_rate,
+            };
 
-            // for d in data.iter_mut() {
-            //     *d *= 12.;
-            // }
+            synth.process(ctx, out);
 
-            for v in data.iter_mut() {
-                trigger_system.process_sample(*v);
+            for (l, r) in out[0].data.iter().zip(out[1].data.iter()) {
+                trigger_system.process_sample((*l + *r) / 2.);
             }
 
             let mut res = Vec::with_capacity(512);
@@ -74,7 +80,13 @@ async fn main() -> Result<()> {
             }
 
             let mut g = last_waveform.lock().unwrap();
-            *g = res;
+
+            let mut ol = Vec8::from_array(&out[0].data);
+            let or = Vec8::from_array(&out[1].data);
+            let v2 = Vec8::splat(2.);
+
+            ol.in_place::<Add>(&or).in_place::<Div>(&v2);
+            *g = ol.to_array().to_vec();
         }));
 
         loop {

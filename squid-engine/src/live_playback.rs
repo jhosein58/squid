@@ -1,15 +1,21 @@
+use crate::Filler;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use squid_core::process_context::{FixedBuf, ProcessContext};
 
-pub struct LivePlaybackk {
+pub struct LivePlayback {
     pub sample_rate: u32,
     pub num_channels: u16,
     device: cpal::Device,
     config: cpal::StreamConfig,
-    stream: Option<cpal::Stream>,
+    stream: cpal::Stream,
 }
 
-impl LivePlaybackk {
-    pub fn new() -> Self {
+impl LivePlayback {
+    pub fn new(
+        handle: Box<
+            dyn for<'a, 'b> FnMut(&'a ProcessContext<'b>, &mut [&mut FixedBuf]) + Send + 'static,
+        >,
+    ) -> Self {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -19,33 +25,36 @@ impl LivePlaybackk {
         let sample_rate = config.sample_rate.0;
         let num_channels = config.channels;
 
+        let mut filler = Filler::new(handle);
+
+        let stream = device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    filler.fill_stereo(data);
+                },
+                |err| eprintln!("an error occurred on stream: {}", err),
+                None,
+            )
+            .unwrap();
         Self {
             sample_rate,
             num_channels,
             device,
             config,
-            stream: None,
+            stream,
         }
     }
 
-    pub fn build_stream(&mut self, mut handle: Box<dyn FnMut(&mut [f32]) + Send>) {
-        self.stream = Some(
-            self.device
-                .build_output_stream(
-                    &self.config,
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
-                        (handle)(data);
-                    },
-                    |err| eprintln!("an error occurred on stream: {}", err),
-                    None,
-                )
-                .unwrap(),
-        );
+    pub fn play(&self) {
+        if let Err(e) = self.stream.play() {
+            eprintln!("Failed to play stream: {}", e);
+        }
     }
 
-    pub fn play(&mut self) {
-        if let Some(ref mut s) = self.stream {
-            let _ = s.play();
+    pub fn pause(&self) {
+        if let Err(e) = self.stream.pause() {
+            eprintln!("Failed to pause stream: {}", e);
         }
     }
 }

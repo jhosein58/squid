@@ -1,81 +1,32 @@
+use std::time::Duration;
+
 use squid_core::{
-    CyclicMod, ModRate, Modulator, Note, Oscillator, Processor, Transport, Waveform,
-    bitcrusher_proc::BitCrusherProc,
-    composite_osc::DualOsc,
-    fdelay_proc::FeedbackDelayProc,
-    hclip_proc::HardClipProc,
-    lfo_func_mod::FunctionLFO,
-    primetives::{NoiseOsc, SinOsc},
-    saturator_proc::SaturatorProc,
+    AudioNode, FloatVector, Fv, Rand,
+    oscillators::{Oscillator, saw_osc::SawOsc, sin_mono_osc::SinOsc},
+    vecblock::{VecAdd, VecBlock},
 };
-use squid_engine::formats::wav::{Wav, WavSpec};
+use squid_engine::{LivePlayback, oscillators::unison_osc::UnisonOsc};
 
 fn main() {
-    //let mut pb = LivePlayback::new();
+    // let mut sin_osc = UnisonOsc::new(Box::new(SawOsc::new()));
+    // sin_osc.configure(440., 44100., None);
+    // sin_osc.set_unison(32);
+    // sin_osc.detune(100.);
 
-    // let mut sine_oscillator = NoiseOsc::new(44100);
-    // sine_oscillator.set_frequency(Note::new(PitchClass::D, 5).to_frequency().into());
-
-    // pb.build_stream(Box::new(move |data| {
-    //     let num_frames = data.len() / pb.num_channels as usize;
-
-    //     for frame_index in 0..num_frames {
-    //         let value = sine_oscillator.next_sample();
-
-    //         for channel_index in 0..pb.num_channels {
-    //             let sample_index = frame_index * pb.num_channels as usize + channel_index as usize;
-    //             data[sample_index] = value;
-    //         }
+    // let pb = LivePlayback::new(Box::new(move |ctx, out| {
+    //     for _ in 0..1 {
+    //         sin_osc.process(ctx, out);
     //     }
     // }));
+
+    // //pb.play();
 
     // loop {
     //     std::thread::sleep(Duration::from_secs(1));
     // }
 
-    let sr = 44100;
-    let mut osc = DualOsc(SinOsc(sr), NoiseOsc(sr));
-    osc.set_frequency(
-        Note::new(squid_core::PitchClass::E, 1)
-            .to_frequency()
-            .into(),
-    );
-    osc.set_ratio(0.15);
-
-    let mut res = Wav::new(WavSpec {
-        audio_format: 1,
-        num_channels: 1,
-        sample_rate: sr,
-        bits_per_sample: 16,
-    });
-
-    struct W1;
-    impl Waveform for W1 {
-        fn process(&self, phase: f32) -> f32 {
-            1.0 - phase
-        }
-    }
-
-    struct W2;
-    impl Waveform for W2 {
-        fn process(&self, phase: f32) -> f32 {
-            phase
-        }
-    }
-
-    let mut env = FunctionLFO::new(sr as f32, W1);
-    let mut lfo = FunctionLFO::new(sr as f32, W2);
-
-    env.set_rate(ModRate::Hz(4.0));
-    lfo.set_rate(ModRate::Hz(0.12));
-    let mut tr = Transport::new(sr as f32, 60.);
-    tr.play();
-
-    let mut d = BitCrusherProc::new(16., 20);
-    for _ in 0..44100 * 30 {
-        tr.tick();
-        env.tick(&mut tr);
-        res.samples.push(d.process(osc.next_sample() * env.value()));
-    }
-    res.write_to_path("test.wav").unwrap();
+    let a = FloatVector::splat(1.);
+    let b = FloatVector::splat(1.);
+    let c = a + b;
+    dbg!(c.to_array());
 }

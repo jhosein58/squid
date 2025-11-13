@@ -1,7 +1,7 @@
 use crate::oscillator::Oscillator;
 use core::f32::consts::TAU;
 use libm::floorf;
-
+#[derive(Clone, Copy)]
 pub struct FuncOscillator<F>
 where
     F: Fn(f32) -> f32 + Send + Sync + 'static,
@@ -68,6 +68,7 @@ macro_rules! define_oscillator {
         $struct_name:ident,
         $waveform_fn:expr
     ) => {
+        #[derive(Clone, Copy)]
         pub struct $struct_name<F>
         where
             F: Fn(f32) -> f32 + Send + Sync + 'static,

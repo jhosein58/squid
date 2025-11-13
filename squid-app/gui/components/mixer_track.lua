@@ -23,7 +23,9 @@ function MixerTrack:new(prop)
         width = obj.width,
         height = obj.height,
         bg = color.rgba(0, 0, 0, 235),
-
+        radius = 8,
+        border_width = 4,
+        border_color = color.rgba(0, 0, 0, 74),
     }, Col:new({
         children = {
             Container:new({ width = Size.relative(1), height = Size.relative(0.25), },
@@ -61,7 +63,7 @@ function MixerTrack:new(prop)
                             --bg = color.rgb(25, 25, 25),
 
                         }, Center:new({
-                            child = Text:new({ text = obj.name })
+                            child = Text:new({ text = obj.name, size = 18 })
                         })),
                     }
                 })
@@ -81,6 +83,7 @@ function MixerTrack:register_interactive()
 end
 
 function MixerTrack:calculate_layout(...)
+    BaseComponent.calculate_layout(self, ...)
     self.child:calculate_layout(...)
 end
 
