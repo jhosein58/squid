@@ -1,14 +1,36 @@
-use crate::{Event, MAX_BLOCK_SIZE};
+use std::ops::{Deref, DerefMut};
 
+use crate::{Event, FloatVector};
+#[derive(Clone)]
 pub struct FixedBuf {
-    pub data: [f32; MAX_BLOCK_SIZE],
+    pub data: FloatVector,
 }
 
 impl Default for FixedBuf {
     fn default() -> Self {
         Self {
-            data: [0.; MAX_BLOCK_SIZE],
+            data: FloatVector::default(),
         }
+    }
+}
+
+impl From<FloatVector> for FixedBuf {
+    fn from(data: FloatVector) -> Self {
+        Self { data }
+    }
+}
+
+impl Deref for FixedBuf {
+    type Target = FloatVector;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl DerefMut for FixedBuf {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
     }
 }
 

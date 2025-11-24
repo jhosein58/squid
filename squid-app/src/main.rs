@@ -1,5 +1,8 @@
+#![feature(portable_simd)]
+
 use std::{
     fs,
+    simd::Simd,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -9,11 +12,11 @@ use macroquad::prelude::*;
 use mlua::{Function, Lua, Result};
 use squid_app::api::RuntimeApi;
 use squid_core::{
-    Event, EventData, FixedSpscQueue, Note, PitchClass, Plugin,
+    Event, EventData, FixedSpscQueue, FloatVector, Note, PitchClass, Plugin, Rand,
+    modulators::envlopes::ar_env::ArEnv,
     oscillators::{saw_osc::SawOsc, sin_osc::SinOsc},
     process_context::ProcessContext,
     synths::poly_synth::PolySynth,
-    vecblock::{Add, Div, Vec8},
 };
 use squid_engine::{
     LivePlayback, OscilloscopeTrigger, StreamContext, TriggerEdge,
@@ -53,19 +56,21 @@ async fn main() -> Result<()> {
             44100.,
         );
 
-        let mut osc = SinOsc::new();
+        let mut osc = UnisonOsc::new(Box::new(SawOsc::new()));
+        osc.set_unison(16);
+        osc.detune(4.);
 
-        let mut synth = PolySynth::new(osc);
+        let mut synth = PolySynth::new(osc, ArEnv::new(0.05, 8., 44100.));
 
-        let pd = LivePlayback::new(Box::new(move |ctx, out| {
+        let pd = LivePlayback::new(move |out| {
             let mut e = Vec::new();
             while let Some(v) = shared_ctx.events.pop() {
                 e.push(v);
             }
             let ctx = &ProcessContext {
-                inputs: ctx.inputs,
+                inputs: &[],
                 events: &e,
-                sample_rate: ctx.sample_rate,
+                sample_rate: 44100.,
             };
 
             synth.process(ctx, out);
@@ -81,13 +86,12 @@ async fn main() -> Result<()> {
 
             let mut g = last_waveform.lock().unwrap();
 
-            let mut ol = Vec8::from_array(&out[0].data);
-            let or = Vec8::from_array(&out[1].data);
-            let v2 = Vec8::splat(2.);
+            let mut ol = FloatVector::from_array(&out[0].data);
+            let or = FloatVector::from_array(&out[1].data);
 
-            ol.in_place::<Add>(&or).in_place::<Div>(&v2);
+            ol.zip_map_in_place(&or, |l, r| (l + r) / Simd::splat(2.));
             *g = ol.to_array().to_vec();
-        }));
+        });
 
         loop {
             thread::sleep(Duration::from_millis(10));

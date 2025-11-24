@@ -1,18 +1,13 @@
-use squid_core::{
-    MAX_BLOCK_SIZE,
-    process_context::{FixedBuf, ProcessContext},
-};
+use squid_core::{MAX_BLOCK_SIZE, process_context::FixedBuf};
 
-pub struct Filler {
-    handler: Box<dyn for<'a, 'b> FnMut(&'a ProcessContext<'b>, &mut [&mut FixedBuf]) + Send>,
+pub struct Filler<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> {
+    handler: T,
     left_channel: Vec<f32>,
     right_channel: Vec<f32>,
 }
 
-impl Filler {
-    pub fn new(
-        handler: Box<dyn for<'a, 'b> FnMut(&'a ProcessContext<'b>, &mut [&mut FixedBuf]) + Send>,
-    ) -> Self {
+impl<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> Filler<T> {
+    pub fn new(handler: T) -> Self {
         Filler {
             handler,
             left_channel: vec![],
@@ -43,12 +38,8 @@ impl Filler {
             }
         }
 
-        let mut l_channel = FixedBuf {
-            data: [0.0; MAX_BLOCK_SIZE],
-        };
-        let mut r_channel = FixedBuf {
-            data: [0.0; MAX_BLOCK_SIZE],
-        };
+        let mut l_channel = FixedBuf::default();
+        let mut r_channel = FixedBuf::default();
 
         const BLOCK_SAMPLES_STEREO: usize = MAX_BLOCK_SIZE * 2;
 
@@ -56,14 +47,7 @@ impl Filler {
         let full_blocks = available_samples / BLOCK_SAMPLES_STEREO;
 
         for _ in 0..full_blocks {
-            (self.handler)(
-                &ProcessContext {
-                    sample_rate: 44100.0,
-                    events: &[],
-                    inputs: &[],
-                },
-                &mut [&mut l_channel, &mut r_channel],
-            );
+            (self.handler)(&mut [&mut l_channel, &mut r_channel]);
 
             for i in 0..MAX_BLOCK_SIZE {
                 buf[write_idx + i * 2] = l_channel.data[i];
@@ -76,14 +60,7 @@ impl Filler {
         let remaining_frames = remaining_samples / 2;
 
         if remaining_frames > 0 {
-            (self.handler)(
-                &ProcessContext {
-                    sample_rate: 44100.0,
-                    events: &[],
-                    inputs: &[],
-                },
-                &mut [&mut l_channel, &mut r_channel],
-            );
+            (self.handler)(&mut [&mut l_channel, &mut r_channel]);
 
             for i in 0..remaining_frames {
                 let l = l_channel.data[i];

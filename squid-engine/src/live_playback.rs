@@ -1,6 +1,7 @@
 use crate::Filler;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use squid_core::process_context::{FixedBuf, ProcessContext};
+use cpal::{BufferSize, StreamConfig};
+use squid_core::process_context::FixedBuf;
 
 pub struct LivePlayback {
     pub sample_rate: u32,
@@ -11,19 +12,38 @@ pub struct LivePlayback {
 }
 
 impl LivePlayback {
-    pub fn new(
-        handle: Box<
-            dyn for<'a, 'b> FnMut(&'a ProcessContext<'b>, &mut [&mut FixedBuf]) + Send + 'static,
-        >,
-    ) -> Self {
+    pub fn new<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static>(handle: T) -> Self {
         let host = cpal::default_host();
         let device = host
             .default_output_device()
             .expect("no output device available");
-        let config = device.default_output_config().unwrap().config();
+
+        let supported_config = device
+            .default_output_config()
+            .expect("no default output config");
+
+        let target_buffer_size: u32 = 256;
+
+        let buffer_size = match supported_config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => {
+                let v = target_buffer_size.clamp(*min, *max);
+                BufferSize::Fixed(v)
+            }
+            cpal::SupportedBufferSize::Unknown => BufferSize::Fixed(target_buffer_size),
+        };
+
+        let config = StreamConfig {
+            channels: supported_config.channels(),
+            sample_rate: supported_config.sample_rate(),
+            buffer_size: buffer_size,
+        };
 
         let sample_rate = config.sample_rate.0;
         let num_channels = config.channels;
+
+        println!("Audio Initialized:");
+        println!("  Sample Rate: {}", sample_rate);
+        println!("  Requested Buffer: {:?}", buffer_size);
 
         let mut filler = Filler::new(handle);
 
@@ -37,6 +57,9 @@ impl LivePlayback {
                 None,
             )
             .unwrap();
+
+        stream.play().unwrap();
+
         Self {
             sample_rate,
             num_channels,

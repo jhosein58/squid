@@ -5,5 +5,4 @@ pub trait Oscillator: AudioNode + Clone {
 }
 
 pub mod saw_osc;
-pub mod sin_mono_osc;
 pub mod sin_osc;

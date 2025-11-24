@@ -8,3 +8,4 @@ squid-core = { path = "../squid-core" }
 cpal = "0.16.0"
 ringbuf = "0.4.8"
 midir = "0.10.3"
+sleef = "0.3.2"

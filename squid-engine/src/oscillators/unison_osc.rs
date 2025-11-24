@@ -1,14 +1,11 @@
-use std::simd::f32x8;
+use std::simd::Simd;
 
 use squid_core::{
-    AudioNode, FloatVector, Rand,
+    AudioNode, Rand,
     mixing_simd::MixingSimd,
     oscillators::Oscillator,
     process_context::{FixedBuf, ProcessContext},
-    shapers::sine_shaper,
 };
-
-use crate::Voice;
 
 #[derive(Clone)]
 pub struct UnisonOsc<T: Oscillator> {
@@ -19,6 +16,9 @@ pub struct UnisonOsc<T: Oscillator> {
     rng: Rand,
     sample_rate: f32,
     detune_amount: f32,
+    l_sum: FixedBuf,
+    r_sum: FixedBuf,
+    tmp_buf: FixedBuf,
 }
 
 impl<T: Oscillator> UnisonOsc<T> {
@@ -31,6 +31,9 @@ impl<T: Oscillator> UnisonOsc<T> {
             rng: Rand::new(0),
             sample_rate: 44100.,
             detune_amount: 0.,
+            l_sum: FixedBuf::default(),
+            r_sum: FixedBuf::default(),
+            tmp_buf: FixedBuf::default(),
         }
     }
 
@@ -67,42 +70,37 @@ impl<T: Oscillator> UnisonOsc<T> {
 
 impl<T: Oscillator> AudioNode for UnisonOsc<T> {
     fn process(&mut self, ctx: &ProcessContext, outputs: &mut [&mut FixedBuf]) {
-        let mut l_sum = FixedBuf::default();
-        let mut r_sum = FixedBuf::default();
-        let mut div = 0;
-        let mut tmp_buf = FixedBuf::default();
+        let v_zero = Simd::splat(0.);
+        self.l_sum.map_in_place(|c| v_zero);
+        self.r_sum.map_in_place(|c| v_zero);
+
+        let mut div = 0.;
 
         for (voice, pan) in self.voices.iter_mut().zip(self.pans.iter()) {
-            voice.process(ctx, &mut [&mut tmp_buf]);
+            voice.process(ctx, &mut [&mut self.tmp_buf]);
 
-            let (tmp_chunks, _) = tmp_buf.data.as_chunks::<8>();
-            for (i, chunk) in tmp_chunks.iter().enumerate() {
-                let (left, right) = MixingSimd::mono_pan(f32x8::from_array(*chunk), *pan);
-                for j in 0..8 {
-                    let left = left[j];
-                    let right = right[j];
-                    l_sum.data[i * 8 + j] += left;
-                    r_sum.data[i * 8 + j] += right;
-                }
-            }
-            div += 1;
+            self.l_sum.zip_map_in_place(&self.tmp_buf, |l, t| {
+                l + (MixingSimd::mono_pan_left(t, *pan))
+            });
+            self.r_sum.zip_map_in_place(&self.tmp_buf, |r, t| {
+                r + (MixingSimd::mono_pan_right(t, *pan))
+            });
+
+            div += 1.;
         }
 
-        if div == 0 {
+        if div == 0. {
             return;
         }
 
-        div /= 8;
-        for i in 0..l_sum.data.len() {
-            l_sum.data[i] /= div as f32;
-            r_sum.data[i] /= div as f32;
-        }
+        div /= 8.;
+        let v_div = Simd::splat(div);
 
-        outputs[0].data.copy_from_slice(&l_sum.data);
-        outputs[1].data.copy_from_slice(&r_sum.data);
+        outputs[0].map_from(&self.l_sum, |c| c / v_div);
+        outputs[1].map_from(&self.r_sum, |c| c / v_div);
     }
 
-    fn reset(&mut self, sample_rate: f32) {}
+    fn reset(&mut self, _: f32) {}
 }
 
 impl<T: Oscillator> Oscillator for UnisonOsc<T> {

@@ -1,10 +1,10 @@
 use core::cmp;
-use core::simd::f32x8;
+use std::{
+    array,
+    simd::{Simd, StdFloat},
+};
 
-use sleef::Sleef;
-
-const LANES: usize = 8;
-type FloatVector = f32x8;
+use crate::FloatVector;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PhaseAccumulator {
@@ -28,37 +28,38 @@ impl PhaseAccumulator {
     pub fn get_phase(&self) -> f32 {
         self.phase
     }
-    pub fn process_const(&mut self, base_freq: f32, sample_rate: f32, output_buffer: &mut [f32]) {
+
+    pub fn process_const(
+        &mut self,
+        base_freq: f32,
+        sample_rate: f32,
+        output_buffer: &mut FloatVector,
+    ) {
+        //self.process_const_scalar(base_freq, sample_rate, output_buffer);
+
         let phase_delta = base_freq / sample_rate;
-        let phase_delta_vec = FloatVector::splat(phase_delta);
 
-        let lane_indices = FloatVector::from_array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
-        let increments = lane_indices * phase_delta_vec;
+        let indices: [f32; FloatVector::LANES] = array::from_fn(|i| i as f32);
 
-        let mut current_phase = self.phase;
+        let v_indices = Simd::from_array(indices);
 
-        let (chunks, remainder) = output_buffer.as_chunks_mut::<LANES>();
+        let v_offsets = v_indices * Simd::splat(phase_delta);
+        let step_per_vector = (FloatVector::LANES as f32) * phase_delta;
 
-        for chunk in chunks {
-            let start_phase_vec = FloatVector::splat(current_phase);
+        let mut current_base_phase = self.phase;
 
-            let phase_vec = start_phase_vec + increments;
+        output_buffer.map_in_place(|_| {
+            let v_base = Simd::splat(current_base_phase);
+            let v_phase = v_base + v_offsets;
 
-            let wrapped_phase_vec = phase_vec - phase_vec.floor();
+            current_base_phase += step_per_vector;
 
-            *chunk = wrapped_phase_vec.to_array();
+            current_base_phase -= current_base_phase.floor();
 
-            current_phase += LANES as f32 * phase_delta;
-            current_phase = current_phase - current_phase.floor();
-        }
+            v_phase - v_phase.floor()
+        });
 
-        for sample in remainder.iter_mut() {
-            *sample = current_phase;
-            current_phase += phase_delta;
-            current_phase = current_phase - current_phase.floor();
-        }
-
-        self.phase = current_phase;
+        self.phase = current_base_phase;
     }
 
     pub fn process_mod(

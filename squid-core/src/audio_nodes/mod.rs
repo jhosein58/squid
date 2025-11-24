@@ -7,8 +7,11 @@ pub trait AudioNode {
     fn reset(&mut self, sample_rate: f32);
 }
 
+pub mod effects;
 pub mod oscillators;
 pub mod phase_accumulator;
+pub mod processors;
 pub mod shapers;
 pub mod synths;
 pub mod voice;
+pub mod modulators;

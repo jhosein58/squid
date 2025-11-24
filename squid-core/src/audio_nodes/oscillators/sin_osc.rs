@@ -1,5 +1,9 @@
+use std::simd::Simd;
+
+use sleef::f32x::sin_fast;
+
 use crate::{
-    AudioNode, MAX_BLOCK_SIZE,
+    AudioNode,
     oscillators::Oscillator,
     phase_accumulator::PhaseAccumulator,
     process_context::{FixedBuf, ProcessContext},
@@ -27,20 +31,16 @@ impl SinOsc {
 
 impl AudioNode for SinOsc {
     fn process(&mut self, _: &ProcessContext, outputs: &mut [&mut FixedBuf]) {
-        let mut phases = [0.; MAX_BLOCK_SIZE];
+        let (left_slice, right_slice) = outputs.split_at_mut(1);
+        let mut left_buf = &mut left_slice[0];
 
         self.phasor
-            .process_const(self.freq, self.sample_rate, &mut phases);
+            .process_const(self.freq, self.sample_rate, &mut left_buf);
 
-        let ctx = ProcessContext {
-            sample_rate: self.sample_rate,
-            events: &[],
-            inputs: &[&FixedBuf { data: phases }],
-        };
+        let v_tau = Simd::splat(std::f32::consts::TAU);
+        left_buf.data.map_in_place(|phase| sin_fast(phase * v_tau));
 
-        self.shaper.process(&ctx, outputs);
-
-        outputs[1].data = outputs[0].data.clone();
+        right_slice[0].replace(left_buf);
     }
 
     fn reset(&mut self, sample_rate: f32) {

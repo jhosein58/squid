@@ -1,5 +1,7 @@
+use std::simd::Simd;
+
 use crate::{
-    AudioNode, MAX_BLOCK_SIZE,
+    AudioNode,
     oscillators::Oscillator,
     phase_accumulator::PhaseAccumulator,
     process_context::{FixedBuf, ProcessContext},
@@ -27,18 +29,13 @@ impl SawOsc {
 
 impl AudioNode for SawOsc {
     fn process(&mut self, _: &ProcessContext, outputs: &mut [&mut FixedBuf]) {
-        let mut phases = [0.; MAX_BLOCK_SIZE];
-
         self.phasor
-            .process_const(self.freq, self.sample_rate, &mut phases);
+            .process_const(self.freq, self.sample_rate, &mut outputs[0]);
 
-        let ctx = ProcessContext {
-            sample_rate: self.sample_rate,
-            events: &[],
-            inputs: &[&FixedBuf { data: phases }],
-        };
+        let v_two = Simd::splat(2.);
+        let v_one = Simd::splat(1.);
 
-        self.shaper.process(&ctx, outputs);
+        outputs[0].map_in_place(|c| (c * v_two) - v_one);
 
         //outputs[1].data = outputs[0].data.clone();
     }
