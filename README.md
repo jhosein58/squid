@@ -69,31 +69,23 @@ Squid's modularity means you don't just "use" an oscillator; you build the signa
 
 Here’s how simple it is to generate high-quality audio using the high-level API, while the engine handles SIMD and buffering under the hood.
 ```rust
-// main.rs
+// Simple realtime sine-wave generator using Squid Engine
 fn main() {
-// 1. Configure the environment (Compile-time constants in config.rs)
-let sample_rate = 44100;
+    let ctx = ProcessContext::default();
+    let mut osc = SinOsc::new();
 
-// 2. Create a Sawtooth Oscillator (SIMD accelerated by default)
-let mut saw_osc = SawOsc::new(sample_rate);
-saw_osc.set_frequency(440.0);
+    // (frequency, sample rate, optional initial phase)
+    osc.configure(440.0, 44100.0, None);
 
-// 3. Prepare the WAV writer
-let mut wav_file = Wav::new(WavSpec::cd_mono());
+    // Start realtime playback
+    let _pd = LivePlayback::new(move |out| {
+        osc.process(&ctx, out);
+    });
 
-// 4. Render loop
-println!("Rendering 3 seconds of anti-aliased sawtooth...");
-for _ in 0..(sample_rate * 3) {
-// The engine processes internally in blocks, 
-// but exposes a convenient sample-by-sample API for simple tasks.
-wav_file.push_sample(saw_osc.next_sample());
+    loop {
+        std::thread::sleep(Duration::from_secs(1));
+    }
 }
-
-// 5. Save to disk
-wav_file.save("output.wav").unwrap();
-println!("Done.");
-}
-```
 ---
 
 ## 🔮 Roadmap
