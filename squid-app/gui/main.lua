@@ -90,8 +90,7 @@ local function play_note_off(note)
     engine.send_note_off_event(note)
 end
 
--- انتخاب BPM دلخواه
-local bpm = 80
+local bpm = 128
 local seconds_per_beat = 60 / bpm
 
 local events = engine.read_midi_file("test.mid")
@@ -126,7 +125,7 @@ end
 
 
 function update()
-    update_midi(engine.get_delta_time())
+    --update_midi(engine.get_delta_time())
     local sw, sh = engine.get_screen_width(), engine.get_screen_height()
 
 

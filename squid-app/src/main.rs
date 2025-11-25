@@ -12,14 +12,15 @@ use macroquad::prelude::*;
 use mlua::{Function, Lua, Result};
 use squid_app::api::RuntimeApi;
 use squid_core::{
-    Event, EventData, FixedSpscQueue, FloatVector, Note, PitchClass, Plugin, Rand,
+    Event, EventData, FixedSpscQueue, FloatVector, MAX_BLOCK_SIZE, Note, PitchClass, Plugin, Rand,
+    TARGET_LATENCY_FRAMES,
     modulators::envlopes::ar_env::ArEnv,
     oscillators::{saw_osc::SawOsc, sin_osc::SinOsc},
-    process_context::ProcessContext,
+    process_context::{FixedBuf, ProcessContext},
     synths::poly_synth::PolySynth,
 };
 use squid_engine::{
-    LivePlayback, OscilloscopeTrigger, StreamContext, TriggerEdge,
+    AudioBridge, BufferAdapter, LivePlayback, OscilloscopeTrigger, StreamContext, TriggerEdge,
     oscillators::unison_osc::UnisonOsc, sin_synth::SinSynth,
 };
 
@@ -56,41 +57,62 @@ async fn main() -> Result<()> {
             44100.,
         );
 
-        let mut osc = UnisonOsc::new(Box::new(SawOsc::new()));
-        osc.set_unison(16);
-        osc.detune(4.);
+        let audio_bridge = Arc::new(AudioBridge::new());
+        let audio_bridge_c = audio_bridge.clone();
 
-        let mut synth = PolySynth::new(osc, ArEnv::new(0.05, 8., 44100.));
+        let mut l_buf = FixedBuf::default();
+        let mut r_buf = FixedBuf::default();
 
-        let pd = LivePlayback::new(move |out| {
-            let mut e = Vec::new();
-            while let Some(v) = shared_ctx.events.pop() {
-                e.push(v);
+        let mut osc = SawOsc::new();
+
+        let mut synth = PolySynth::new(osc, ArEnv::new(0.1, 0.5, 44100.));
+
+        thread::spawn(move || {
+            loop {
+                while audio_bridge_c.left_channel.len() >= TARGET_LATENCY_FRAMES
+                    || !audio_bridge_c.left_channel.has_room_for(MAX_BLOCK_SIZE)
+                {
+                    std::thread::sleep(std::time::Duration::from_micros(500));
+                }
+
+                let mut e = Vec::new();
+                while let Some(v) = shared_ctx.events.pop() {
+                    e.push(v);
+                }
+                let ctx = &ProcessContext {
+                    inputs: &[],
+                    events: &e,
+                    sample_rate: 44100.,
+                };
+
+                synth.process(&ctx, &mut [&mut l_buf, &mut r_buf]);
+
+                audio_bridge_c.push_slice(&[&l_buf, &r_buf]);
             }
-            let ctx = &ProcessContext {
-                inputs: &[],
-                events: &e,
-                sample_rate: 44100.,
-            };
+        });
 
-            synth.process(ctx, out);
-
-            for (l, r) in out[0].data.iter().zip(out[1].data.iter()) {
-                trigger_system.process_sample((*l + *r) / 2.);
-            }
-
-            let mut res = Vec::with_capacity(512);
-            while let Some(v) = shared.pop() {
-                res.push(v);
-            }
-
+        let mut adapter = BufferAdapter::new();
+        let pd = LivePlayback::new_raw(move |out| {
+            adapter.fill(out, &audio_bridge);
             let mut g = last_waveform.lock().unwrap();
+            *g = out.to_vec();
 
-            let mut ol = FloatVector::from_array(&out[0].data);
-            let or = FloatVector::from_array(&out[1].data);
+            // for (l, r) in out[0].data.iter().zip(out[1].data.iter()) {
+            //     trigger_system.process_sample((*l + *r) / 2.);
+            // }
 
-            ol.zip_map_in_place(&or, |l, r| (l + r) / Simd::splat(2.));
-            *g = ol.to_array().to_vec();
+            // let mut res = Vec::with_capacity(512);
+            // while let Some(v) = shared.pop() {
+            //     res.push(v);
+            // }
+
+            // let mut g = last_waveform.lock().unwrap();
+
+            // let mut ol = FloatVector::from_array(&out[0].data);
+            // let or = FloatVector::from_array(&out[1].data);
+
+            // ol.zip_map_in_place(&or, |l, r| (l + r) / Simd::splat(2.));
+            //*g = ol.to_array().to_vec();
         });
 
         loop {

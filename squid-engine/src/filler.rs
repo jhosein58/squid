@@ -4,6 +4,8 @@ pub struct Filler<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> {
     handler: T,
     left_channel: Vec<f32>,
     right_channel: Vec<f32>,
+    tmp_l_buf: FixedBuf,
+    tmp_r_buf: FixedBuf,
 }
 
 impl<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> Filler<T> {
@@ -12,6 +14,8 @@ impl<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> Filler<T> {
             handler,
             left_channel: vec![],
             right_channel: vec![],
+            tmp_l_buf: FixedBuf::default(),
+            tmp_r_buf: FixedBuf::default(),
         }
     }
 
@@ -38,20 +42,17 @@ impl<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> Filler<T> {
             }
         }
 
-        let mut l_channel = FixedBuf::default();
-        let mut r_channel = FixedBuf::default();
-
         const BLOCK_SAMPLES_STEREO: usize = MAX_BLOCK_SIZE * 2;
 
         let available_samples = buf.len() - write_idx;
         let full_blocks = available_samples / BLOCK_SAMPLES_STEREO;
 
         for _ in 0..full_blocks {
-            (self.handler)(&mut [&mut l_channel, &mut r_channel]);
+            (self.handler)(&mut [&mut self.tmp_l_buf, &mut self.tmp_r_buf]);
 
             for i in 0..MAX_BLOCK_SIZE {
-                buf[write_idx + i * 2] = l_channel.data[i];
-                buf[write_idx + i * 2 + 1] = r_channel.data[i];
+                buf[write_idx + i * 2] = self.tmp_l_buf.data[i];
+                buf[write_idx + i * 2 + 1] = self.tmp_r_buf.data[i];
             }
             write_idx += BLOCK_SAMPLES_STEREO;
         }
@@ -60,18 +61,18 @@ impl<T: FnMut(&mut [&mut FixedBuf]) + Send + 'static> Filler<T> {
         let remaining_frames = remaining_samples / 2;
 
         if remaining_frames > 0 {
-            (self.handler)(&mut [&mut l_channel, &mut r_channel]);
+            (self.handler)(&mut [&mut self.tmp_l_buf, &mut self.tmp_r_buf]);
 
             for i in 0..remaining_frames {
-                let l = l_channel.data[i];
-                let r = r_channel.data[i];
+                let l = self.tmp_l_buf.data[i];
+                let r = self.tmp_r_buf.data[i];
                 buf[write_idx + i * 2] = l;
                 buf[write_idx + i * 2 + 1] = r;
             }
 
             for i in remaining_frames..MAX_BLOCK_SIZE {
-                self.left_channel.push(l_channel.data[i]);
-                self.right_channel.push(r_channel.data[i]);
+                self.left_channel.push(self.tmp_l_buf.data[i]);
+                self.right_channel.push(self.tmp_r_buf.data[i]);
             }
         }
     }

@@ -8,7 +8,7 @@ use crate::{
     voice::Voice,
 };
 
-const VOICE_COUNT: usize = 16;
+const VOICE_COUNT: usize = 64;
 
 pub struct PolySynth<T: Oscillator> {
     voices: [Voice<T>; VOICE_COUNT],
@@ -53,19 +53,12 @@ impl<T: Oscillator> AudioNode for PolySynth<T> {
             dummy_out[1].data.fill(0.0);
             voice.process(ctx, dummy_out);
 
-            for i in 0..dummy_out[0].data.len() {
-                sum_out[0].data[i] += dummy_out[0].data[i];
-                sum_out[1].data[i] += dummy_out[1].data[i];
-            }
-
-            if !voice.is_idle() {
-                div += 1;
-            }
-        }
-
-        for i in 0..sum_out[0].data.len() {
-            sum_out[0].data[i] /= div as f32;
-            sum_out[1].data[i] /= div as f32;
+            sum_out[0]
+                .data
+                .zip_map_in_place(&dummy_out[0].data, |s, l| s + l);
+            sum_out[1]
+                .data
+                .zip_map_in_place(&dummy_out[1].data, |s, r| s + r);
         }
 
         for i in 0..sum_out[0].data.len() {

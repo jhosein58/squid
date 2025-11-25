@@ -1,9 +1,11 @@
 use std::simd::Simd;
 
 use crate::{
-    AudioNode,
+    AudioNode, FloatVector,
     oscillators::Oscillator,
     phase_accumulator::PhaseAccumulator,
+    phase_tracker::PhaseTracker,
+    polyblep::PolyBlep,
     process_context::{FixedBuf, ProcessContext},
     shapers::saw_shaper::SawShaper,
 };
@@ -14,6 +16,7 @@ pub struct SawOsc {
     sample_rate: f32,
     phasor: PhaseAccumulator,
     shaper: SawShaper,
+    phase_tracker: PhaseTracker<{ FloatVector::LANES }>,
 }
 
 impl SawOsc {
@@ -23,6 +26,7 @@ impl SawOsc {
             sample_rate: 0.,
             phasor: PhaseAccumulator::new(0.),
             shaper: SawShaper,
+            phase_tracker: PhaseTracker::new(),
         }
     }
 }
@@ -35,7 +39,15 @@ impl AudioNode for SawOsc {
         let v_two = Simd::splat(2.);
         let v_one = Simd::splat(1.);
 
-        outputs[0].map_in_place(|c| (c * v_two) - v_one);
+        outputs[0].map_in_place(|phase| {
+            let dt = self.phase_tracker.get_dt(phase);
+
+            let naive_saw = (phase * v_two) - v_one;
+
+            let residual = PolyBlep::calc_blep_residual(phase, dt);
+
+            naive_saw - residual
+        });
 
         //outputs[1].data = outputs[0].data.clone();
     }

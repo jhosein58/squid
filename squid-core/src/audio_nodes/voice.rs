@@ -1,8 +1,7 @@
 use std::simd::Simd;
 
 use crate::{
-    AudioNode, Note, SILENCE_DB,
-    effects::gain_fx::GainFx,
+    AudioNode, Note, VOICE_GAIN,
     modulators::envlopes::{Envelope, ar_env::ArEnv},
     oscillators::Oscillator,
     process_context::{FixedBuf, ProcessContext},
@@ -12,7 +11,6 @@ use crate::{
 pub struct Voice<T: Oscillator> {
     osc: T,
     env: ArEnv,
-    gain: GainFx,
     active: bool,
     sample_rate: f32,
     freq: f32,
@@ -27,7 +25,6 @@ where
         Self {
             osc,
             env,
-            gain: GainFx,
             active: false,
             sample_rate: 0.,
             freq: 0.,
@@ -36,11 +33,11 @@ where
     }
 
     pub fn is_idle(&self) -> bool {
-        !self.active // && !self.env.is_active()
+        !self.active //&& !self.env.is_active()
     }
 
     pub fn is_playing(&self, note: u8) -> bool {
-        self.active && self.note == note // && self.env.is_active()
+        self.active && self.note == note
     }
 
     pub fn note_on(&mut self, note: u8, sample_rate: f32) {
@@ -50,6 +47,7 @@ where
         self.active = true;
 
         self.osc.configure(self.freq, self.sample_rate, None);
+
         self.env.trigger();
     }
 
@@ -64,31 +62,32 @@ where
     T: Oscillator,
 {
     fn process(&mut self, ctx: &ProcessContext, outputs: &mut [&mut FixedBuf]) {
-        if self.active {
-            //|| self.env.is_active() {
-            // let mut env_mod_signal = FixedBuf::default();
-            // self.env.process(ctx, &mut [&mut env_mod_signal]);
-
-            // let v_silence = Simd::splat(SILENCE_DB);
-            // let v_one = Simd::splat(1.0);
-
-            // env_mod_signal.map_in_place(|c| v_silence * (v_one - c));
-
-            // let mut lc = FixedBuf::default();
-            // let mut lr = FixedBuf::default();
-            // self.osc.process(ctx, &mut [&mut lc, &mut lr]);
-
-            // let gain_ctx = ProcessContext {
-            //     sample_rate: self.sample_rate,
-            //     events: &[],
-            //     inputs: &[&lc, &lr, &env_mod_signal.into()],
-            // };
-            // self.gain.process(&gain_ctx, outputs);
-            self.osc.process(ctx, outputs);
+        if self.is_idle() {
+            return;
         }
+
+        // let mut env_vals = FixedBuf::default();
+        // self.env.process(ctx, &mut [&mut env_vals]);
+
+        // self.osc.process(ctx, outputs);
+
+        // let (left_out, right_out) = outputs.split_at_mut(1);
+
+        // left_out[0].zip_map_in_place(&env_vals, |audio_sample, env_val| audio_sample * env_val);
+
+        // if let Some(right) = right_out.first_mut() {
+        //     right.zip_map_in_place(&env_vals, |audio_sample, env_val| audio_sample * env_val);
+        // }
+
+        self.osc.process(ctx, outputs);
+        let g = Simd::splat(VOICE_GAIN);
+        outputs[0].data.map_in_place(|c| c * g);
+        outputs[1].data.map_in_place(|c| c * g);
     }
 
     fn reset(&mut self, sample_rate: f32) {
         self.osc.reset(sample_rate);
+        self.env.reset(sample_rate);
+        self.active = false;
     }
 }

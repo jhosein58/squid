@@ -80,4 +80,59 @@ impl LivePlayback {
             eprintln!("Failed to pause stream: {}", e);
         }
     }
+
+    pub fn new_raw<T: FnMut(&mut [f32]) + Send + 'static>(mut handle: T) -> Self {
+        let host = cpal::default_host();
+        let device = host
+            .default_output_device()
+            .expect("no output device available");
+
+        let supported_config = device
+            .default_output_config()
+            .expect("no default output config");
+
+        let target_buffer_size: u32 = 256;
+
+        let buffer_size = match supported_config.buffer_size() {
+            cpal::SupportedBufferSize::Range { min, max } => {
+                let v = target_buffer_size.clamp(*min, *max);
+                BufferSize::Fixed(v)
+            }
+            cpal::SupportedBufferSize::Unknown => BufferSize::Fixed(target_buffer_size),
+        };
+
+        let config = StreamConfig {
+            channels: supported_config.channels(),
+            sample_rate: supported_config.sample_rate(),
+            buffer_size: buffer_size,
+        };
+
+        let sample_rate = config.sample_rate.0;
+        let num_channels = config.channels;
+
+        println!("Audio Initialized:");
+        println!("  Sample Rate: {}", sample_rate);
+        println!("  Requested Buffer: {:?}", buffer_size);
+
+        let stream = device
+            .build_output_stream(
+                &config,
+                move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    handle(data);
+                },
+                |err| eprintln!("an error occurred on stream: {}", err),
+                None,
+            )
+            .unwrap();
+
+        stream.play().unwrap();
+
+        Self {
+            sample_rate,
+            num_channels,
+            device,
+            config,
+            stream,
+        }
+    }
 }

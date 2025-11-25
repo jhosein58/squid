@@ -8,10 +8,11 @@ pub trait AudioNode {
 }
 
 pub mod effects;
+pub mod modulators;
 pub mod oscillators;
 pub mod phase_accumulator;
+pub mod phase_tracker;
 pub mod processors;
 pub mod shapers;
 pub mod synths;
 pub mod voice;
-pub mod modulators;
