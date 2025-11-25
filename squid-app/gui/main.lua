@@ -37,33 +37,39 @@ end)
 
 
 
-left = { 0, 0 }
-right = { 0, 0 }
-mono = { 0, 0 }
+
+
+local SCOPE_VIEW_WIDTH = 128
+local TRIGGER_THRESHOLD = 0
+
+local stabilized_buffer = {}
+
 function waveform(data)
-    local li, ri = 1, 1
-    for i = 1, #data, 2 do
-        left[li] = data[i]
-        right[ri] = data[i + 1]
-        mono[li] = (data[i] + (data[i + 1] or data[i])) / 2 -- fallback if missing
-        li = li + 1
-        ri = ri + 1
-    end
-    if #data == 0 then
-        left = { 0, 0 }
-        right = { 0, 0 }
-        mono = { 0, 0 }
+    if not data or #data < SCOPE_VIEW_WIDTH then return end
+
+    local trigger_index = 1
+    local found_trigger = false
+
+    local search_limit = #data - SCOPE_VIEW_WIDTH
+
+    for i = 1, search_limit do
+        local current_val = data[i]
+        local next_val = data[i + 1]
+
+        if current_val <= TRIGGER_THRESHOLD and next_val > TRIGGER_THRESHOLD then
+            trigger_index = i
+            found_trigger = true
+            break
+        end
     end
 
-    TopBarScope.data = mono
-    local sum_sq = 0
-    for i = 1, #mono do
-        local s = mono[i]
-        sum_sq = sum_sq + s * s
+    for k in pairs(stabilized_buffer) do stabilized_buffer[k] = nil end
+
+    for i = 0, SCOPE_VIEW_WIDTH - 1 do
+        stabilized_buffer[i + 1] = data[trigger_index + i] or 0
     end
 
-    local rms = math.sqrt(sum_sq / #mono)
-    Meter:set_level(rms)
+    TopBarScope.data = stabilized_buffer
 end
 
 local topbar_layout = require("gui/layouts/topbar")

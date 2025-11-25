@@ -46,16 +46,7 @@ async fn main() -> Result<()> {
     let last_waveform_c = last_waveform.clone();
 
     thread::spawn(move || {
-        let shared = Arc::new(FixedSpscQueue::<f32, 128>::new());
-
-        let mut trigger_system = OscilloscopeTrigger::<128>::new(
-            shared.clone(),
-            0.0,
-            TriggerEdge::Rising,
-            0.5,
-            10.,
-            44100.,
-        );
+        let shared = Arc::new(FixedSpscQueue::<f32, 2048>::new());
 
         let audio_bridge = Arc::new(AudioBridge::new());
         let audio_bridge_c = audio_bridge.clone();
@@ -63,7 +54,9 @@ async fn main() -> Result<()> {
         let mut l_buf = FixedBuf::default();
         let mut r_buf = FixedBuf::default();
 
-        let mut osc = SawOsc::new();
+        let mut osc = UnisonOsc::new(Box::new(SawOsc::new()));
+        osc.set_unison(12);
+        osc.detune(4.);
 
         let mut synth = PolySynth::new(osc, ArEnv::new(0.1, 0.5, 44100.));
 
@@ -92,27 +85,22 @@ async fn main() -> Result<()> {
         });
 
         let mut adapter = BufferAdapter::new();
-        let pd = LivePlayback::new_raw(move |out| {
+        let _pd = LivePlayback::new_raw(move |out| {
             adapter.fill(out, &audio_bridge);
-            let mut g = last_waveform.lock().unwrap();
-            *g = out.to_vec();
 
-            // for (l, r) in out[0].data.iter().zip(out[1].data.iter()) {
-            //     trigger_system.process_sample((*l + *r) / 2.);
-            // }
+            for i in 0..out.len() / 2 {
+                let _ = shared.push((out[i * 2] + out[i * 2 + 1]) / 2.);
+            }
 
-            // let mut res = Vec::with_capacity(512);
-            // while let Some(v) = shared.pop() {
-            //     res.push(v);
-            // }
+            if shared.len() >= 500 {
+                let mut res = Vec::with_capacity(2048);
+                while let Some(v) = shared.pop() {
+                    res.push(v);
+                }
 
-            // let mut g = last_waveform.lock().unwrap();
-
-            // let mut ol = FloatVector::from_array(&out[0].data);
-            // let or = FloatVector::from_array(&out[1].data);
-
-            // ol.zip_map_in_place(&or, |l, r| (l + r) / Simd::splat(2.));
-            //*g = ol.to_array().to_vec();
+                let mut g = last_waveform.lock().unwrap();
+                *g = res;
+            }
         });
 
         loop {

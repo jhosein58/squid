@@ -13,7 +13,6 @@ pub enum TriggerEdge {
     Rising,
     Falling,
 }
-
 pub struct OscilloscopeTrigger<const SIZE: usize> {
     queue: Arc<FixedSpscQueue<f32, SIZE>>,
     history_buffer: Vec<f32>,
@@ -28,6 +27,11 @@ pub struct OscilloscopeTrigger<const SIZE: usize> {
     samples_to_collect: usize,
     holdoff_counter: usize,
     last_sample_value: f32,
+    // phase tracking fields:
+    freq_estimate: f32,
+    sample_rate: f32,
+    phase_accum: f32,
+    phase_window: f32,
 }
 
 impl<const SIZE: usize> OscilloscopeTrigger<SIZE> {
@@ -58,24 +62,29 @@ impl<const SIZE: usize> OscilloscopeTrigger<SIZE> {
             samples_to_collect: 0,
             holdoff_counter: 0,
             last_sample_value: 0.0,
+            freq_estimate: 440.0,
+            sample_rate,
+            phase_accum: 0.0,
+            phase_window: 0.03,
         }
     }
 
-    pub fn set_trigger_level(&mut self, level: f32) {
-        self.trigger_level = level;
-    }
-
-    pub fn set_trigger_edge(&mut self, edge: TriggerEdge) {
-        self.trigger_edge = edge;
+    pub fn set_frequency(&mut self, freq: f32) {
+        self.freq_estimate = freq;
     }
 
     pub fn process_sample(&mut self, sample: f32) {
         self.history_buffer[self.write_pos] = sample;
         self.write_pos = (self.write_pos + 1) % self.history_buffer.len();
 
+        self.phase_accum += self.freq_estimate / self.sample_rate;
+        if self.phase_accum >= 1.0 {
+            self.phase_accum -= 1.0;
+        }
+
         match self.state {
             TriggerState::Armed => {
-                let triggered = match self.trigger_edge {
+                let edge_hit = match self.trigger_edge {
                     TriggerEdge::Rising => {
                         self.last_sample_value < (self.trigger_level - self.hysteresis)
                             && sample >= (self.trigger_level + self.hysteresis)
@@ -86,11 +95,12 @@ impl<const SIZE: usize> OscilloscopeTrigger<SIZE> {
                     }
                 };
 
-                if triggered {
+                if edge_hit && (self.phase_accum < self.phase_window) {
                     self.state = TriggerState::Triggered;
                     self.samples_to_collect = self.post_trigger_samples.saturating_sub(1);
                 }
             }
+
             TriggerState::Triggered => {
                 if self.samples_to_collect > 0 {
                     self.samples_to_collect -= 1;
@@ -100,13 +110,16 @@ impl<const SIZE: usize> OscilloscopeTrigger<SIZE> {
                     self.holdoff_counter = self.holdoff_samples;
                 }
             }
+
             TriggerState::Holdoff => {
-                self.holdoff_counter -= 1;
-                if self.holdoff_counter == 0 {
+                if self.holdoff_counter > 0 {
+                    self.holdoff_counter -= 1;
+                } else {
                     self.state = TriggerState::Armed;
                 }
             }
         }
+
         self.last_sample_value = sample;
     }
 
@@ -114,8 +127,10 @@ impl<const SIZE: usize> OscilloscopeTrigger<SIZE> {
         let mut frame_buffer = [0.0f32; SIZE];
         let history_len = self.history_buffer.len();
 
+        let start_index = (self.write_pos + history_len - self.post_trigger_samples) % history_len;
+
         for i in 0..SIZE {
-            let history_index = (self.write_pos + history_len - SIZE + i) % history_len;
+            let history_index = (start_index + i) % history_len;
             frame_buffer[i] = self.history_buffer[history_index];
         }
 

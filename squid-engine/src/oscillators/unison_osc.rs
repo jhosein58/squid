@@ -93,9 +93,6 @@ impl<T: Oscillator> AudioNode for UnisonOsc<T> {
             return;
         }
 
-        div /= 8.;
-        // let v_div = Simd::splat(div);
-
         outputs[0].map_from(&self.l_sum, |c| c);
         outputs[1].map_from(&self.r_sum, |c| c);
     }
