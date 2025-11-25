@@ -83,7 +83,7 @@ fn main() {
     });
 
     loop {
-        std::thread::sleep(Duration::from_secs(1));
+        sleep(Duration::from_secs(1));
     }
 }
 ```
