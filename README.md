@@ -16,7 +16,7 @@ Squid is engineered for raw speed. Benchmarks performed on a consumer-grade **In
 
 | Scenario | Buffer Size | Oscillators | Status |
 | :--- | :---: | :---: | :--- |
-| **Raw Throughput** | 2048 | **60,000+** | Stable (Sawtooth, Naive) |
+| **Raw Throughput** | 1024 | **60,000+** | Stable (Sawtooth, Naive) |
 | **Low Latency** | 64 | **13,000+** | Stable (Sawtooth, **PolyBLEP Anti-aliased**) |
 
 *Note: Performance scales linearly with SIMD lane width (AVX2/AVX-512).*
