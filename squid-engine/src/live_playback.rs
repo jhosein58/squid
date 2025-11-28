@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use std::time::Duration;
 
 use crate::{AudioBridge, BufferAdapter, Filler};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

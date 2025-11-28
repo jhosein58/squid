@@ -1,89 +1,99 @@
 # Squid Audio Engine
 
-**A high-performance, modular, and `#[no_std]` audio synthesis engine written in Rust.**
+[![Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![no_std](https://img.shields.io/badge/stdlib-no__std-green.svg)]()
 
-Squid is an experimental DSP powerhouse designed from first principles for extreme efficiency, zero-latency performance, and portability. It bridges the gap between low-level embedded audio processing and high-level DAW capabilities, utilizing modern CPU features like SIMD for massive parallel processing.
+**A hyper-performant, modular, and `#[no_std]` audio synthesis framework written in Rust.**
+
+Squid is an experimental DSP powerhouse designed from first principles for extreme efficiency, deterministic low-latency performance, and portability. It bridges the gap between bare-metal embedded audio processing and high-level modular synthesis, leveraging modern CPU features like SIMD for massive parallel throughput.
 
 ---
 
-## ⚡ Key Features & Highlights
+## ⚡ Performance Benchmarks
 
-### 🚀 Extreme Performance & SIMD
-*   **SIMD Everywhere:** Data is stored and processed in blocks using **Structure of Arrays (SoA)** layout. Every processing step is vectorized.
-*   **Massive Polyphony:** Capable of rendering **7,000 concurrent sawtooth oscillators** on a single 1GHz CPU thread.
-*   **Fixed-Block Processing:** Decoupled from hardware buffer sizes. The internal engine runs on fixed-block sizes for deterministic CPU load and optimal cache usage.
+Squid is engineered for raw speed. Benchmarks performed on a consumer-grade **Intel Core i5-1035G1 (1.00 GHz)** single thread:
+
+| Scenario | Buffer Size | Oscillators | Status |
+| :--- | :---: | :---: | :--- |
+| **Raw Throughput** | 2048 | **60,000+** | Stable (Sawtooth, Naive) |
+| **Low Latency** | 64 | **13,000+** | Stable (Sawtooth, **PolyBLEP Anti-aliased**) |
+
+*Note: Performance scales linearly with SIMD lane width (AVX2/AVX-512).*
+
+---
+
+## 🚀 Key Features
+
+### 🧠 High-Performance DSP Architecture
+*   **SIMD-First Design:** Data is stored and processed in **Structure of Arrays (SoA)** blocks. All internal processing is auto-vectorized/explicitly vectorized.
+*   **Branchless Core:** The DSP kernel uses integer math logic and bitwise operations to eliminate branching penalties in critical loops.
+*   **Fixed-Block Processing:** The internal engine runs on fixed block sizes (configurable), completely decoupled from the audio hardware buffer request size.
+*   **Integer Phase Accumulation:** Precision-guaranteed phase tracking using `u32` wrapping arithmetic, eliminating floating-point errors and jitter.
 
 ### 🎛️ Pristine Audio Quality
-*   **Advanced Anti-Aliasing:** Oscillators use **PolyBLEP** (Polynomial Band-Limited Step) algorithms to eliminate aliasing on hard-sync and sharp waveforms, fully implemented in SIMD.
-*   **Smart Gain Staging:** Built-in summing bus architecture with **Soft Clipping** ensures infinite headroom and prevents harsh digital clipping.
-*   **Dual-Buffer Architecture:** Lock-free communication between the audio thread and the UI. The audio callback **never blocks**.
+*   **PolyBLEP Anti-Aliasing:** Oscillators utilize Polynomial Band-Limited Step algorithms to suppress aliasing artifacts above the Nyquist frequency without the overhead of oversampling.
+*   **Decoupled Audio Thread:** Uses a **Lock-Free SPSC Ring Buffer** pipeline. The audio callback *never* blocks or waits for the render thread, ensuring glitch-free playback even under heavy load.
+*   **Infinite Headroom:** Internal summing bus architecture with Soft Clipping prevents harsh digital distortion.
 
-### 🛠️ Architecture & Design
-*   **`#[no_std]` Core:** The core logic has zero dependencies and can run on bare-metal embedded systems or WebAssembly.
-*   **Zero-Allocation at Runtime:** All memory is allocated upfront. The engine operates almost entirely on the stack or pre-allocated buffers during the audio callback.
-*   **Universal Signal Path:** **"Everything is a Signal."** There is no distinction between audio and control signals. The output of any module can modulate any parameter of another.
-*   **Modular Components:** Highly granular design. An Oscillator is composed of smaller, reusable atoms like *Phase Accumulators* and *Phase Shapers*.
-*   **Compile-Time Configuration:** Critical parameters (Sample Rate, Block Size, SIMD width) are tunable via `config.rs` for maximum optimization.
+### 🛠️ System & Engineering
+*   **`#[no_std]` & Dependency-Free:** The core library runs on bare metal, embedded microcontrollers, or WASM.
+*   **Zero Runtime Allocation:** All memory is allocated upfront. The engine operates almost entirely on the stack or pre-allocated arenas, guaranteeing **zero GC pauses** and cache locality.
+*   **"Everything is a Signal":** Unified modulation system. Audio and Control signals (LFOs, Envelopes) are treated identically, allowing for audio-rate modulation of *any* parameter.
+*   **Modular Atomicity:** Oscillators are deconstructed into atomic components (Phase Accumulators, Phase Shapers), allowing for deep customization.
 
-### 🎨 Reactive Lua UI Framework
-*   **Custom GUI Stack:** A lightweight, reactive UI framework written in Lua with minimal dependencies.
-*   **Component-Based:** UI elements are modular components that react to state changes.
-*   **Visualizers:** Includes custom drivers for stable oscilloscope rendering (Zero-crossing triggers) and high-performance metering.
-
----
-
-## 🏗️ Architecture Overview
-
-Squid follows a strict three-tier architecture to ensure separation of concerns:
-
-### 1. The Core (`squid-core`) - `#[no_std]`
-The mathematical heart of the engine. It knows nothing about the OS, threads, or heap allocation.
-*   **Pure Math & DSP:** FFT, Filters, Oscillators (SIMD).
-*   **Traits:** `Oscillator`, `Processor`, `Modulator`.
-*   **Platform Agnostic:** Runs on Microcontrollers, WASM, or Desktop.
-
-### 2. The Engine (`squid-engine`) - `std`
-The glue layer that brings the core to life in a desktop environment.
-*   **IO Management:** Interfaces with CPAL or custom audio drivers.
-*   **Thread Safety:** Manages lock-free ring buffers and atomic state synchronization.
-*   **File IO:** Includes a custom `.wav` writer (header generation + PCM streaming).
-
-### 3. The App (`squid-app`) - Tauri + Lua
-The visual layer.
-*   **Scripting:** Logic and UI layout controlled via Lua.
-*   **Rendering:** High-performance canvas rendering for waveforms and controls.
+### 🎨 Reactive UI Ecosystem
+*   **Lua-Powered Interface:** A custom, lightweight, and reactive UI framework built on Lua.
+*   **Component-Based:** UI elements are modular and react instantly to engine state changes.
+*   **Custom Drivers:** Includes a high-performance `.wav` writer and custom rendering drivers for oscilloscopes and metering.
 
 ---
 
-## 🎹 Core Concepts
+## 🏗️ Architecture Hierarchy
 
-Squid's modularity means you don't just "use" an oscillator; you build the signal flow.
+1.  **`squid-core` (`no_std`):**
+    The mathematical heart. Contains pure DSP algorithms, SIMD implementations, and traits (`Oscillator`, `Processor`). Platform agnostic.
 
-*   **Oscillator**: Deconstructed into *Phase Accumulators* (tracking time/frequency) and *Shapers* (converting phase to amplitude via PolyBLEP/Wavetable).
-*   **Processor**: Transformers like Filters, Bitcrushers, or Waveshapers that take a block of SIMD data and mutate it.
-*   **Modulator**: LFOs and Envelopes are treated as audio signals (DC coupled), allowing for audio-rate modulation of any parameter.
+2.  **`squid-engine` (`std`):**
+    The desktop integration layer. Handles Threading (Park/Unpark), Audio I/O (CPAL), File I/O, and manages the `LivePlayback` pipeline.
+
+3.  **`squid-app` (Tauri + Lua):**
+    The visual layer. Handles user interaction, script loading, and rendering via a high-performance 2D canvas.
 
 ---
 
-## 🚀 Quick Example: Generating a WAV
+## 💻 Quick Start
 
-Here’s how simple it is to generate high-quality audio using the high-level API, while the engine handles SIMD and buffering under the hood.
+Generating high-performance audio with Squid is simple, despite the low-level optimizations under the hood:
 ```rust
-// Simple realtime sine-wave generator using Squid Engine
+use squid_core::{
+    AudioNode,
+    oscillators::{Oscillator, saw_osc::SawOsc},
+    process_context::ProcessContext,
+};
+use squid_engine::LivePlayback;
+
+
 fn main() {
+    // 1. Create the context (holds sample rate, block size info)
     let ctx = ProcessContext::default();
-    let mut osc = SinOsc::new();
 
-    // (frequency, sample rate, optional initial phase)
-    osc.configure(440.0, 44100.0, None);
+    // 2. Initialize a PolyBLEP Sawtooth Oscillator
+    let mut osc = SawOsc::new();
+    osc.configure(440.0, 44100.0, None); // Freq, SampleRate, InitialPhase
 
-    // Start realtime playback
-    let _pd = LivePlayback::new(move |out| {
+    // 3. Initialize the Audio Backend (Low Latency)
+    let mut pb = LivePlayback::init();
+
+    // 4. Start the non-blocking render loop
+    // The closure is moved to the dedicated render thread
+    pb.start(move |out| {
         osc.process(&ctx, out);
     });
-
+    
+    // Keep the main thread alive
     loop {
-        sleep(Duration::from_secs(1));
+        std::thread::sleep(std::time::Duration::from_secs(1));
     }
 }
 ```
@@ -92,12 +102,12 @@ fn main() {
 ## 🔮 Roadmap
 
 *   [x] SIMD PolyBLEP Oscillators
-*   [x] Lock-free Audio Thread
-*   [x] Lua UI Framework
-*   [ ] Filter Implementation (Ladder/State Variable)
-*   [ ] Envelope Generators (ADSR)
-*   [ ] VST/CLAP Plugin Wrapper
+*   [x] Lock-free / Wait-free Audio Architecture
+*   [x] Reactive Lua UI Framework
+*   [ ] State Variable Filters (SIMD Optimized)
+*   [ ] Vectorized Envelope Generators (ADSR)
+*   [ ] Plugin Wrapper (VST3/CLAP)
 
 ---
-*License: MIT*
 
+*Licensed under the MIT License.*
