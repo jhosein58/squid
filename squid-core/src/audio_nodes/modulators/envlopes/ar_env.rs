@@ -112,7 +112,7 @@
 //     }
 // }
 
-use std::{array, simd::Simd};
+use core::{array, simd::Simd};
 
 use crate::{
     AudioNode,
@@ -121,7 +121,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, PartialEq)]
-enum ArEnvState {
+pub enum ArEnvState {
     Idle,
     Attack,
     Sustain,

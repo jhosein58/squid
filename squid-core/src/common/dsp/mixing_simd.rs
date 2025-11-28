@@ -1,9 +1,5 @@
 use core::simd::f32x8;
-use std::simd::{LaneCount, Simd, SupportedLaneCount};
-
-use sleef::Sleef;
-
-use crate::FloatVector;
+use core::simd::{LaneCount, Simd, SupportedLaneCount};
 
 pub struct MixingSimd;
 

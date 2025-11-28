@@ -24,7 +24,7 @@ impl<T: Oscillator> PolySynth<T> {
     fn process_events(&mut self, events: &[Event]) {
         for event in events {
             match event.data {
-                EventData::NoteOn { note, velocity } => {
+                EventData::NoteOn { note, velocity: _ } => {
                     if let Some(voice) = self.voices.iter_mut().find(|v| v.is_idle()) {
                         voice.note_on(note, 44100.);
                     }
@@ -46,7 +46,6 @@ impl<T: Oscillator> AudioNode for PolySynth<T> {
 
         let dummy_out = &mut [&mut FixedBuf::default(), &mut FixedBuf::default()];
         let sum_out = &mut [&mut FixedBuf::default(), &mut FixedBuf::default()];
-        let mut div = 0;
 
         for voice in &mut self.voices {
             dummy_out[0].data.fill(0.0);

@@ -5,7 +5,7 @@ use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 pub struct FixedSpscQueue<T, const N: usize> {
-    buffer: Box<[UnsafeCell<MaybeUninit<T>>; N]>,
+    buffer: [UnsafeCell<MaybeUninit<T>>; N],
     head: AtomicUsize,
     tail: AtomicUsize,
 }
@@ -17,11 +17,8 @@ impl<T, const N: usize> FixedSpscQueue<T, N> {
     pub fn new() -> Self {
         assert!(N.is_power_of_two(), "N must be a power of two");
 
-        let buffer = unsafe {
-            let layout = std::alloc::Layout::new::<[UnsafeCell<MaybeUninit<T>>; N]>();
-            let ptr = std::alloc::alloc(layout) as *mut [UnsafeCell<MaybeUninit<T>>; N];
-            Box::from_raw(ptr)
-        };
+        let buffer =
+            unsafe { MaybeUninit::<[UnsafeCell<MaybeUninit<T>>; N]>::uninit().assume_init() };
 
         Self {
             buffer,
@@ -135,7 +132,7 @@ impl<T, const N: usize> FixedSpscQueue<T, N> {
         }
         let head = self.head.load(Ordering::Relaxed);
         unsafe {
-            (*self.buffer[head].get()).write(val);
+            (*self.buffer.get_unchecked(head).get()).write(val);
         }
         self.head.store((head + 1) & (N - 1), Ordering::Release);
         Ok(())
@@ -150,7 +147,7 @@ impl<T, const N: usize> FixedSpscQueue<T, N> {
             return None;
         }
 
-        let val = unsafe { (*self.buffer[tail].get()).assume_init_read() };
+        let val = unsafe { (*self.buffer.get_unchecked(tail).get()).assume_init_read() };
         self.tail.store((tail + 1) & (N - 1), Ordering::Release);
         Some(val)
     }

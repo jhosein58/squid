@@ -1,4 +1,4 @@
-use std::simd::Simd;
+use core::simd::Simd;
 
 use crate::{
     AudioNode,

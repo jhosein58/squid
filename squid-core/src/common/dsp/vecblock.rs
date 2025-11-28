@@ -1,14 +1,8 @@
+use core::simd::{LaneCount, Simd, SimdElement, SupportedLaneCount};
 use core::{
-    ops::{Add, Div, Mul, Sub},
-    simd::{LaneCount, Simd, SimdElement, SupportedLaneCount, num::SimdFloat},
-};
-use sleef::{Sleef, f32x::sin_fast};
-use std::{
     ops::{Deref, DerefMut},
     slice,
 };
-
-use crate::{LUT_RESOLUTION, approx::SIN_TABLE};
 
 #[derive(Clone)]
 pub struct VecBlock<T, const N: usize, const S: usize>
@@ -139,25 +133,5 @@ where
         for ((out_chunk, s1_chunk), s2_chunk) in combined_iter {
             *out_chunk = op(*s1_chunk, *s2_chunk);
         }
-    }
-
-    const VEC_LUT_RESOLUTION: Simd<f32, N> = Simd::splat((LUT_RESOLUTION - 1) as f32);
-
-    pub fn sin_lookup(mut self) -> Self {
-        for d in self.buf.iter_mut() {
-            let values = (*d * Self::VEC_LUT_RESOLUTION).to_array();
-
-            let mut res = [0.; N];
-
-            let mut lane = 0;
-            while lane < N {
-                res[lane] = SIN_TABLE[values[lane] as usize];
-                lane += 1;
-            }
-
-            *d = Simd::from_array(res);
-        }
-
-        self
     }
 }

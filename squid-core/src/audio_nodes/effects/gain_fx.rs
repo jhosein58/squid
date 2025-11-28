@@ -1,6 +1,6 @@
 use crate::{
     AudioNode,
-    microprocessors::gain::Gain,
+    dsp::microprocessors::gain::Gain,
     process_context::{FixedBuf, ProcessContext},
 };
 

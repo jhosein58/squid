@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, Simd, SupportedLaneCount, cmp::SimdPartialOrd};
+use core::simd::{LaneCount, Simd, SupportedLaneCount, cmp::SimdPartialOrd};
 
 pub struct PolyBlep;
 

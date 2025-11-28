@@ -3,6 +3,7 @@ pub mod gain;
 pub mod microprocessors;
 pub mod mixing;
 pub mod mixing_simd;
+pub mod osc_core;
 pub mod polyblep;
 pub mod vecblock;
 

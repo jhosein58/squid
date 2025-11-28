@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, Simd, SupportedLaneCount, cmp::SimdPartialOrd, num::SimdFloat};
+use core::simd::{LaneCount, Simd, SupportedLaneCount, cmp::SimdPartialOrd, num::SimdFloat};
 
 use crate::FloatVector;
 

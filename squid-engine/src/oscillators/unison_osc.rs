@@ -1,10 +1,11 @@
 use std::simd::Simd;
 
 use squid_core::{
-    AudioNode, Rand,
-    mixing_simd::MixingSimd,
+    AudioNode,
+    dsp::mixing_simd::MixingSimd,
     oscillators::Oscillator,
     process_context::{FixedBuf, ProcessContext},
+    rand::Rand,
 };
 
 #[derive(Clone)]
@@ -71,8 +72,8 @@ impl<T: Oscillator> UnisonOsc<T> {
 impl<T: Oscillator> AudioNode for UnisonOsc<T> {
     fn process(&mut self, ctx: &ProcessContext, outputs: &mut [&mut FixedBuf]) {
         let v_zero = Simd::splat(0.);
-        self.l_sum.map_in_place(|c| v_zero);
-        self.r_sum.map_in_place(|c| v_zero);
+        self.l_sum.map_in_place(|_| v_zero);
+        self.r_sum.map_in_place(|_| v_zero);
 
         let mut div = 0.;
 

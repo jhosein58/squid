@@ -1,5 +1,5 @@
 use core::f32::consts::TAU;
-use std::simd::Simd;
+use core::simd::Simd;
 
 use sleef::f32x::sin_fast;
 

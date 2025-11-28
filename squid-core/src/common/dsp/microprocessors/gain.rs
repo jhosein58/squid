@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, Simd, SupportedLaneCount};
+use core::simd::{LaneCount, Simd, SupportedLaneCount};
 
 pub struct DbConverter;
 
