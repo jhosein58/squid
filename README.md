@@ -57,7 +57,7 @@ Squid is engineered for raw speed. Benchmarks performed on a consumer-grade **In
 2.  **`squid-engine` (`std`):**
     The desktop integration layer. Handles Threading (Park/Unpark), Audio I/O (CPAL), File I/O, and manages the `LivePlayback` pipeline.
 
-3.  **`squid-app` (Tauri + Lua):**
+3.  **`squid-app` (Lua):**
     The visual layer. Handles user interaction, script loading, and rendering via a high-performance 2D canvas.
 
 ---
