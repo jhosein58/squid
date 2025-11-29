@@ -1,17 +1,24 @@
-use core::cmp;
 use core::simd::num::SimdUint;
+use core::simd::{LaneCount, SupportedLaneCount};
 use core::{array, simd::Simd};
 
-use sleef::Sleef;
-
-use crate::FloatVector;
+use crate::Fv;
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct PhaseAccumulator {
+pub struct PhaseAccumulator<const N: usize>
+where
+    LaneCount<N>: SupportedLaneCount,
+{
     phase_u32: u32,
 }
 
-impl PhaseAccumulator {
+impl<const N: usize> PhaseAccumulator<N>
+where
+    LaneCount<N>: SupportedLaneCount,
+{
+    const SCALE: f32 = 4_294_967_296.0;
+    const INV_SCALE: f32 = 1.0 / Self::SCALE;
+
     #[inline]
     pub fn new(initial_phase: f32) -> Self {
         Self {
@@ -29,53 +36,32 @@ impl PhaseAccumulator {
         self.phase_u32 as f32 * (1.0 / 4_294_967_296.0)
     }
 
-    // pub fn process_const(
-    //     &mut self,
-    //     base_freq: f32,
-    //     sample_rate: f32,
-    //     output_buffer: &mut FloatVector,
-    // ) {
-    //     let phase_delta = base_freq / sample_rate;
+    pub fn next_const(&mut self, base_freq: f32, sample_rate: f32) -> Simd<f32, N> {
+        let inc = ((base_freq / sample_rate) * Self::SCALE) as u32;
+        let mut phase_u32 = self.phase_u32;
+        let indices: [u32; N] = array::from_fn(|i| i as u32);
+        let v_offsets = Simd::from_array(indices) * Simd::splat(inc);
+        let step = inc.wrapping_mul(N as u32);
+        let v_norm = Simd::splat(Self::INV_SCALE);
+        let v_base = Simd::splat(phase_u32);
 
-    //     let indices: [f32; FloatVector::LANES] = array::from_fn(|i| i as f32);
+        let v_phase_u32 = v_base + v_offsets;
 
-    //     let v_indices = Simd::from_array(indices);
+        phase_u32 = phase_u32.wrapping_add(step);
+        self.phase_u32 = phase_u32;
 
-    //     let v_offsets = v_indices * Simd::splat(phase_delta);
-    //     let step_per_vector = (FloatVector::LANES as f32) * phase_delta;
+        v_phase_u32.cast::<f32>() * v_norm
+    }
 
-    //     let mut current_base_phase = self.phase;
-
-    //     output_buffer.map_in_place(|_| {
-    //         let v_base = Simd::splat(current_base_phase);
-    //         let v_phase = v_base + v_offsets;
-
-    //         current_base_phase += step_per_vector;
-
-    //         current_base_phase -= current_base_phase.floor();
-
-    //         v_phase - v_phase.floor()
-    //     });
-
-    //     self.phase = current_base_phase;
-    // }
-    pub fn process_const(
-        &mut self,
-        base_freq: f32,
-        sample_rate: f32,
-        output_buffer: &mut FloatVector,
-    ) {
-        const SCALE: f32 = 4_294_967_296.0;
-        const INV_SCALE: f32 = 1.0 / SCALE;
-
-        let inc = ((base_freq / sample_rate) * SCALE) as u32;
+    pub fn process_const(&mut self, base_freq: f32, sample_rate: f32, output_buffer: &mut Fv<N>) {
+        let inc = ((base_freq / sample_rate) * Self::SCALE) as u32;
 
         let mut phase_u32 = self.phase_u32;
 
-        let indices: [u32; FloatVector::LANES] = array::from_fn(|i| i as u32);
+        let indices: [u32; N] = array::from_fn(|i| i as u32);
         let v_offsets = Simd::from_array(indices) * Simd::splat(inc);
-        let step = inc.wrapping_mul(FloatVector::LANES as u32);
-        let v_norm = Simd::splat(INV_SCALE);
+        let step = inc.wrapping_mul(N as u32);
+        let v_norm = Simd::splat(Self::INV_SCALE);
 
         output_buffer.map_in_place(|_| {
             let v_base = Simd::splat(phase_u32);

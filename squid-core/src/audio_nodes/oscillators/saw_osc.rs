@@ -1,7 +1,7 @@
 use core::simd::Simd;
 
 use crate::{
-    AudioNode, FloatVector,
+    AudioNode, FloatVector, SIMD_LANES,
     dsp::polyblep::PolyBlep,
     oscillators::Oscillator,
     phase_accumulator::PhaseAccumulator,
@@ -13,7 +13,7 @@ use crate::{
 pub struct SawOsc {
     freq: f32,
     sample_rate: f32,
-    phasor: PhaseAccumulator,
+    phasor: PhaseAccumulator<{ SIMD_LANES }>,
 
     phase_tracker: PhaseTracker<{ FloatVector::LANES }>,
 }

@@ -3,7 +3,7 @@ use core::simd::Simd;
 use sleef::f32x::sin_fast;
 
 use crate::{
-    AudioNode,
+    AudioNode, SIMD_LANES,
     oscillators::Oscillator,
     phase_accumulator::PhaseAccumulator,
     process_context::{FixedBuf, ProcessContext},
@@ -13,7 +13,7 @@ use crate::{
 pub struct SinOsc {
     freq: f32,
     sample_rate: f32,
-    phasor: PhaseAccumulator,
+    phasor: PhaseAccumulator<{ SIMD_LANES }>,
 }
 
 impl SinOsc {

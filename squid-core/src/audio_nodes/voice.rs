@@ -1,7 +1,8 @@
-use core::simd::Simd;
+use core::simd::{Mask, Simd};
 
 use crate::{
-    AudioNode, Note, VOICE_GAIN,
+    AudioNode, FloatVector, Note, SIMD_LANES, VOICE_GAIN,
+    dsp::mod_core::adsr_mod_source::AdsrModSource,
     modulators::envlopes::{Envelope, ar_env::ArEnv},
     oscillators::Oscillator,
     process_context::{FixedBuf, ProcessContext},
@@ -10,7 +11,7 @@ use crate::{
 #[derive(Clone, Copy)]
 pub struct Voice<T: Oscillator> {
     osc: T,
-    env: ArEnv,
+    env: AdsrModSource<{ SIMD_LANES }>,
     active: bool,
     sample_rate: f32,
     freq: f32,
@@ -21,7 +22,7 @@ impl<T> Voice<T>
 where
     T: Oscillator,
 {
-    pub fn new(osc: T, env: ArEnv) -> Self {
+    pub fn new(osc: T, env: AdsrModSource<{ SIMD_LANES }>) -> Self {
         Self {
             osc,
             env,
@@ -33,7 +34,7 @@ where
     }
 
     pub fn is_idle(&self) -> bool {
-        !self.active //&& !self.env.is_active()
+        !self.active && self.env.is_idle()
     }
 
     pub fn is_playing(&self, note: u8) -> bool {
@@ -48,12 +49,12 @@ where
 
         self.osc.configure(self.freq, self.sample_rate, None);
 
-        self.env.trigger();
+        self.env.note_on(Mask::splat(true));
     }
 
     pub fn note_off(&mut self) {
         self.active = false;
-        self.env.release();
+        self.env.note_off(Mask::splat(true));
     }
 }
 
@@ -66,28 +67,18 @@ where
             return;
         }
 
-        // let mut env_vals = FixedBuf::default();
-        // self.env.process(ctx, &mut [&mut env_vals]);
-
-        // self.osc.process(ctx, outputs);
-
-        // let (left_out, right_out) = outputs.split_at_mut(1);
-
-        // left_out[0].zip_map_in_place(&env_vals, |audio_sample, env_val| audio_sample * env_val);
-
-        // if let Some(right) = right_out.first_mut() {
-        //     right.zip_map_in_place(&env_vals, |audio_sample, env_val| audio_sample * env_val);
-        // }
-
         self.osc.process(ctx, outputs);
+
+        let mut v_mod = FloatVector::splat(0.);
+        v_mod.map_in_place(|_| self.env.process());
+
         let g = Simd::splat(VOICE_GAIN);
-        outputs[0].data.map_in_place(|c| c * g);
-        outputs[1].data.map_in_place(|c| c * g);
+        outputs[0].data.zip_map_in_place(&v_mod, |c, m| c * g * m);
+        outputs[1].data.zip_map_in_place(&v_mod, |c, m| c * g * m);
     }
 
     fn reset(&mut self, sample_rate: f32) {
         self.osc.reset(sample_rate);
-        self.env.reset(sample_rate);
         self.active = false;
     }
 }

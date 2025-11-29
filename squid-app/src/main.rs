@@ -12,16 +12,18 @@ use macroquad::prelude::*;
 use mlua::{Function, Lua, Result};
 use squid_app::api::RuntimeApi;
 use squid_core::{
-    Event, EventData, FixedSpscQueue, FloatVector, MAX_BLOCK_SIZE, Note, PitchClass, Plugin, Rand,
-    TARGET_LATENCY_FRAMES,
+    Event, EventData, FixedSpscQueue, FloatVector, MAX_BLOCK_SIZE, Note, PitchClass, Plugin,
+    dsp::{
+        filters::sv_filter::ScalarSvf,
+        mod_core::adsr_mod_source::{AdsrModSource, calculate_coefficient},
+    },
     modulators::envlopes::ar_env::ArEnv,
     oscillators::{saw_osc::SawOsc, sin_osc::SinOsc},
     process_context::{FixedBuf, ProcessContext},
     synths::poly_synth::PolySynth,
 };
 use squid_engine::{
-    AudioBridge, BufferAdapter, LivePlayback, OscilloscopeTrigger, StreamContext, TriggerEdge,
-    oscillators::unison_osc::UnisonOsc, sin_synth::SinSynth,
+    AudioBridge, BufferAdapter, LivePlayback, StreamContext, oscillators::unison_osc::UnisonOsc,
 };
 
 use squid_core::AudioNode;
@@ -45,66 +47,70 @@ async fn main() -> Result<()> {
     let last_waveform: Arc<Mutex<Vec<f32>>> = Arc::new(Mutex::new(Vec::new()));
     let last_waveform_c = last_waveform.clone();
 
-    thread::spawn(move || {
-        let shared = Arc::new(FixedSpscQueue::<f32, 2048>::new());
+    let shared = Arc::new(FixedSpscQueue::<f32, 2048>::new());
 
-        let audio_bridge = Arc::new(AudioBridge::new());
-        let audio_bridge_c = audio_bridge.clone();
+    let audio_bridge = Arc::new(AudioBridge::new());
+    let audio_bridge_c = audio_bridge.clone();
 
-        let mut l_buf = FixedBuf::default();
-        let mut r_buf = FixedBuf::default();
+    let mut l_buf = FixedBuf::default();
+    let mut r_buf = FixedBuf::default();
 
-        let mut osc = UnisonOsc::new(Box::new(SawOsc::new()));
-        osc.set_unison(12);
-        osc.detune(4.);
+    let mut osc = UnisonOsc::new(Box::new(SawOsc::new()));
+    osc.set_unison(12);
+    osc.detune(4.);
 
-        let mut synth = PolySynth::new(osc, ArEnv::new(0.1, 0.5, 44100.));
+    let mut adsr = AdsrModSource::new();
+    let sample_rate = 44100.0;
 
-        thread::spawn(move || {
-            loop {
-                while audio_bridge_c.left_channel.len() >= TARGET_LATENCY_FRAMES
-                    || !audio_bridge_c.left_channel.has_room_for(MAX_BLOCK_SIZE)
-                {
-                    std::thread::sleep(std::time::Duration::from_micros(500));
-                }
+    let attack_coeff = calculate_coefficient(25.0, sample_rate);
+    let decay_coeff = calculate_coefficient(10.0, sample_rate);
+    let release_coeff = calculate_coefficient(300.0, sample_rate);
 
-                let mut e = Vec::new();
-                while let Some(v) = shared_ctx.events.pop() {
-                    e.push(v);
-                }
-                let ctx = &ProcessContext {
-                    inputs: &[],
-                    events: &e,
-                    sample_rate: 44100.,
-                };
+    adsr.set_parameters(attack_coeff, decay_coeff, release_coeff, 0.8);
+    let mut synth = PolySynth::new(osc, adsr);
 
-                synth.process(&ctx, &mut [&mut l_buf, &mut r_buf]);
+    let mut f1 = ScalarSvf::new();
+    let mut f2 = ScalarSvf::new();
 
-                audio_bridge_c.push_slice(&[&l_buf, &r_buf]);
+    let mut c = 10.;
+    let mut t = 0;
+
+    let mut pd = LivePlayback::init();
+    pd.start(move |out| {
+        f1.update_coeffs(c, 0.7, 44100.);
+        f2.update_coeffs(c, 0.7, 44100.);
+        let mut e = Vec::new();
+        while let Some(v) = shared_ctx.events.pop() {
+            e.push(v);
+        }
+        let ctx = &ProcessContext {
+            inputs: &[],
+            events: &e,
+            sample_rate: 44100.,
+        };
+
+        synth.process(&ctx, out);
+        out[0].data.map_in_place(|c| c * Simd::splat(0.5));
+        out[1].data.map_in_place(|c| c * Simd::splat(0.5));
+        f1.process_block_lp(out[0]);
+        f2.process_block_lp(out[1]);
+        if t > 1500 {
+            c += 2.;
+        }
+        t += 1;
+
+        for (i, j) in out[0].iter().zip(out[1].iter()) {
+            let _ = shared.push((i + j) / 3.);
+        }
+
+        if shared.len() >= 500 {
+            let mut res = Vec::with_capacity(2048);
+            while let Some(v) = shared.pop() {
+                res.push(v);
             }
-        });
 
-        let mut adapter = BufferAdapter::new();
-        let _pd = LivePlayback::new_raw(move |out| {
-            adapter.fill(out, &audio_bridge);
-
-            for i in 0..out.len() / 2 {
-                let _ = shared.push((out[i * 2] + out[i * 2 + 1]) / 2.);
-            }
-
-            if shared.len() >= 500 {
-                let mut res = Vec::with_capacity(2048);
-                while let Some(v) = shared.pop() {
-                    res.push(v);
-                }
-
-                let mut g = last_waveform.lock().unwrap();
-                *g = res;
-            }
-        });
-
-        loop {
-            thread::sleep(Duration::from_millis(10));
+            let mut g = last_waveform.lock().unwrap();
+            *g = res;
         }
     });
 

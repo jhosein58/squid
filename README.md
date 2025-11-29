@@ -22,6 +22,7 @@ Squid is engineered for raw speed. Benchmarks performed on a consumer-grade **In
 *Note: Performance scales linearly with SIMD lane width (AVX2/AVX-512).*
 
 ---
+[demo](https://github.com/user-attachments/assets/cd046c75-c085-434a-b218-a6e6dccdb039)
 
 ## 🚀 Key Features
 

@@ -1,8 +1,8 @@
 use core::array;
 
 use crate::{
-    AudioNode, Event, EventData,
-    modulators::envlopes::ar_env::ArEnv,
+    AudioNode, Event, EventData, SIMD_LANES,
+    dsp::mod_core::adsr_mod_source::AdsrModSource,
     oscillators::Oscillator,
     process_context::{FixedBuf, ProcessContext},
     voice::Voice,
@@ -15,7 +15,7 @@ pub struct PolySynth<T: Oscillator> {
 }
 
 impl<T: Oscillator> PolySynth<T> {
-    pub fn new(osc: T, env: ArEnv) -> Self {
+    pub fn new(osc: T, env: AdsrModSource<{ 8 }>) -> Self {
         Self {
             voices: array::from_fn(|_| Voice::new(osc.clone(), env)),
         }
